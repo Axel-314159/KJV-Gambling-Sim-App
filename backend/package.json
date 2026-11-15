@@ -1,0 +1,36 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "seed:kjv": "tsx src/scripts/seed-kjv.ts",
+    "create:admin": "tsx src/scripts/create-admin.ts",
+    "cli": "tsx src/scripts/dev-cli.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/cors": "^11.4.3",
+    "@node-rs/argon2": "^2.2.2",
+    "dotenv": "^18.0.10",
+    "fastify": "^5.12.8",
+    "luxon": "^3.7.2",
+    "nodemailer": "^10.5.0",
+    "pg": "^8.23.1",
+    "pg-boss": "^12.38.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "type": "module"
+}
