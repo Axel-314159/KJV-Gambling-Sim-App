@@ -1,4 +1,5 @@
 # KJV Gambling Simulator Web Application
+## v1.0.0
 
 ## Dependencies
 * `postgresql`
