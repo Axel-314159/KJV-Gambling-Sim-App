@@ -12,7 +12,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0-or-later",
   "dependencies": {
     "@fastify/cookie": "^11.1.5",
     "@fastify/cors": "^11.4.3",

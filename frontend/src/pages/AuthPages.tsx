@@ -126,7 +126,7 @@ export function ActivatePasswordPage() {
         body: JSON.stringify({ token, password }),
       });
       await queryClient.invalidateQueries({ queryKey: ['me'] });
-      navigate('/');
+      navigate('/arena');
     } catch (err) {
       setError((err as ApiError).message);
     }
