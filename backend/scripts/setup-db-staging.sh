@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Configurable via environment variables (defaults shown)
-DB_NAME="${DB_NAME:-kjv_game}"
-DB_USER="${DB_USER:-kjv_dev}"
-DB_PASS="${DB_PASS:-devpassword}"
+DB_NAME="${DB_NAME:-kjv_game_test}"
+DB_USER="${DB_USER:-kjv_game_test_user}"
+DB_PASS="${DB_PASS:-cascodeTest2026}"
 DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-5432}"
 

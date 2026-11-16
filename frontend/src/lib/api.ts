@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(_status: number, _code: string, message: string) {
     super(message);
   }
 }
@@ -16,7 +16,9 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body.code || 'UNKNOWN_ERROR', body.message || res.statusText);
+    throw new ApiError(res.status, 
+      body.code || 'UNKNOWN_ERROR', 
+      body.message || res.statusText || 'Request failed (HTTP ${res.status})'
   }
 
   return res.status === 204 ? (undefined as T) : res.json();

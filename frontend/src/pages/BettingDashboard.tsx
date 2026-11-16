@@ -6,7 +6,7 @@ import type { ActiveRoundState, BetSegment, KjvVerse, UserProfile, AutoSelectReq
 import { useServerCountdown } from '../hooks/useServerClock';
 import { KjvExplorer } from '../components/KjvExplorer';
 
-export function BettingDashboard({ user }: { user: UserProfile }) {
+export function BettingDashboard({ user: _user }: { user: UserProfile }) {
   const queryClient = useQueryClient();
   const [draftSegments, setDraftSegments] = useState<BetSegment[]>([]);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
