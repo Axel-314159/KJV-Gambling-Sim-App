@@ -19,6 +19,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     throw new ApiError(res.status, 
       body.code || 'UNKNOWN_ERROR', 
       body.message || res.statusText || 'Request failed (HTTP ${res.status})'
+    );
   }
 
   return res.status === 204 ? (undefined as T) : res.json();
