@@ -34,7 +34,7 @@ export function Layout({ user }: { user: UserProfile | null }) {
               to="/"
               className="font-serif font-bold text-lg text-amber-400 hover:text-amber-300 tracking-wide transition"
             >
-              KJV VERSE ARENA
+              JSTW ARENA
             </Link>
             <nav className="flex items-center gap-1">
               {navItems.map(({ to, label, icon: Icon }) => {

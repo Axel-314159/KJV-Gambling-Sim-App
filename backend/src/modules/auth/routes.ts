@@ -24,7 +24,7 @@ async function sendActivationEmail(email: string, username: string, rawToken: st
   await mailer.sendMail({
     from: env.SMTP_FROM,
     to: email,
-    subject: 'Your KJV Verse Arena Account is Approved',
+    subject: 'Your JSTW Account is Approved',
     text: `Hello ${username},\n\nA moderator has approved your account. Set your password and claim your 1,000 starting Shekels here:\n${link}\n\nThis link expires in 72 hours.`,
   });
 }
