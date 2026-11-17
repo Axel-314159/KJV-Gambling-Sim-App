@@ -12,7 +12,7 @@ export function LandingPage({ user }: { user: UserProfile | null }) {
             Daily Blind Scripture Strategy Game
           </div>
           <h1 className="text-3xl md:text-4xl font-serif font-bold text-slate-100 tracking-tight">
-            KJV Verse Arena
+            Jesus, Spin The Wheel!
           </h1>
 
           {/* === PASTE YOUR INTRO / GAME OVERVIEW PARAGRAPH HERE === */}

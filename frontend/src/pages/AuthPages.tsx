@@ -25,7 +25,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-        <h1 className="text-xl font-bold text-amber-400">Sign In to KJV Verse Arena</h1>
+        <h1 className="text-xl font-bold text-amber-400">Sign In to JSTW</h1>
         {error && <div className="text-sm text-rose-400 bg-rose-950/50 p-2.5 rounded">{error}</div>}
         <input
           type="text"
