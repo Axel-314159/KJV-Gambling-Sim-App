@@ -9,7 +9,7 @@ export function LandingPage({ user }: { user: UserProfile | null }) {
       <section className="bg-slate-900 border border-slate-800 rounded-2xl p-8 md:p-10">
         <div className="max-w-3xl space-y-4">
           <div className="inline-block text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-            Daily Blind Scripture Strategy Game
+            Blind Scripture Gambling Simulator Game
           </div>
           <h1 className="text-3xl md:text-4xl font-serif font-bold text-slate-100 tracking-tight">
             Jesus, Spin The Wheel!
@@ -17,7 +17,7 @@ export function LandingPage({ user }: { user: UserProfile | null }) {
 
           {/* === PASTE YOUR INTRO / GAME OVERVIEW PARAGRAPH HERE === */}
           <p className="text-base md:text-lg text-slate-300 leading-relaxed">
-            Claim passages from the 31,102 verses of the King James Bible, wager Shekels in daily blind rounds, and outmaneuver fellow players. Survive without a single overlapping verse to win your weighted share of the daily pot.
+            Select passages from the 31,102 verses of the King James Bible, wager Shekels in daily blind rounds, and outmaneuver fellow players. Survive without a single overlapping verse to win your weighted share of the daily pot.
           </p>
 
           {/* Auth-Aware Call-to-Action Buttons */}
@@ -97,7 +97,7 @@ export function LandingPage({ user }: { user: UserProfile | null }) {
           {/* === PASTE YOUR RULES & LIMITS HERE === */}
           <div className="text-sm text-slate-300 space-y-2.5 leading-relaxed">
             <p>
-              Approved accounts begin with <strong className="text-amber-300">1,000 Shekels</strong>. Each round sets minimum and maximum limits on segment length, number of discrete segments per slip, and minimum Shekels staked per verse.
+              Approved accounts begin with a starting grant of <strong className="text-amber-300">~100 Shekels</strong>. Each round sets minimum and maximum limits on segment length, number of discrete segments per slip, and minimum Shekels staked per verse.
             </p>
             <p>
               Your total combined verse budget adapts dynamically based on the number of players registered for the round, and your own segments within a slip may never overlap one another.
