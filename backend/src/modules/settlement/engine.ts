@@ -1,4 +1,11 @@
 import { withTransaction } from '../../db/pool.js';
+import type { PoolClient } from 'pg';
+
+export interface JackpotAwardResult {
+  awardedGerahs: bigint;
+  remainingJackpotGerahs: bigint;
+  winnerNewBalanceGerahs: bigint;
+}
 
 interface RawBet {
   id: string;
@@ -8,6 +15,80 @@ interface RawBet {
   verse_length: number;
   stake: number;
 }
+
+/**
+ * Deducts the running jackpot (or a specific Gerah amount) from game_config,
+ * records the negative debit in jackpot_ledger, and credits the winning user.
+ */
+export async function awardJackpot(
+  tx: PoolClient,
+  params: {
+    userId: string;
+    roundId?: number | null;
+    betId?: string | null;
+    /** Optional partial payout in Gerahs; defaults to 100% of current jackpot_balance */
+    amountGerahs?: bigint;
+  }
+): Promise<JackpotAwardResult | null> {
+  const { userId, roundId = null, betId = null, amountGerahs } = params;
+
+  // 1. Lock the singleton config row to prevent concurrent jackpot race conditions
+  const { rows: cfgRows } = await tx.query<{ jackpot_balance: string }>(
+    `SELECT jackpot_balance FROM game_config WHERE id = 1 FOR UPDATE`
+  );
+  const currentJackpot = BigInt(cfgRows[0]?.jackpot_balance ?? 0);
+
+  if (currentJackpot <= 0n) {
+    return null;
+  }
+
+  const payout = amountGerahs !== undefined ? amountGerahs : currentJackpot;
+  if (payout <= 0n || payout > currentJackpot) {
+    throw new Error(`Invalid jackpot payout (${payout}) against balance (${currentJackpot}).`);
+  }
+
+  // 2. Subtract the payout from game_config.jackpot_balance
+  const { rows: updatedCfg } = await tx.query<{ jackpot_balance: string }>(
+    `UPDATE game_config
+     SET jackpot_balance = jackpot_balance - $1, updated_at = NOW()
+     WHERE id = 1 RETURNING jackpot_balance`,
+    [payout.toString()]
+  );
+  const remainingJackpot = BigInt(updatedCfg[0].jackpot_balance);
+
+  // 3. Record the negative deduction in jackpot_ledger
+  await tx.query(
+    `INSERT INTO jackpot_ledger (round_id, user_id, entry_type, amount, balance_after)
+     VALUES ($1, $2, 'JACKPOT_PAYOUT', $3, $4)`,
+    [roundId, userId, (-payout).toString(), remainingJackpot.toString()]
+  );
+
+  // 4. Credit the winner's wallet and record the matching entry in wallet_ledger
+  const { rows: updatedUser } = await tx.query<{ wallet_balance: string }>(
+    `UPDATE users
+     SET wallet_balance = wallet_balance + $1
+     WHERE id = $2
+     RETURNING wallet_balance`,
+    [payout.toString(), userId]
+  );
+  if (!updatedUser.length) {
+    throw new Error(`Jackpot winner user ${userId} not found.`);
+  }
+  const winnerNewBalance = BigInt(updatedUser[0].wallet_balance);
+
+  await tx.query(
+    `INSERT INTO wallet_ledger (user_id, round_id, bet_id, entry_type, amount, balance_after)
+     VALUES ($1, $2, $3, 'JACKPOT_WINNING', $4, $5)`,
+    [userId, roundId, betId, payout.toString(), winnerNewBalance.toString()]
+  );
+
+  return {
+    awardedGerahs: payout,
+    remainingJackpotGerahs: remainingJackpot,
+    winnerNewBalanceGerahs: winnerNewBalance,
+  };
+}
+
 
 export async function settleRound(roundId: number) {
   await withTransaction(async (tx) => {
@@ -48,6 +129,27 @@ export async function settleRound(roundId: number) {
     }
 
     const winners = bets.filter((b) => !collidedIds.has(b.id));
+
+    /* Jackpot checking and Payout */
+    const { rows: jackpotVerseIds } = await tx.query(`SELECT jackpot_start_verse_id, jackpot_end_verse_id FROM game_config WHERE id = 1`);
+    const jackpotStartId = jackpotVerseIds[0];
+    const jackpotEndId = jackpotVerseIds[1];
+    
+    for (const winner of winners) {
+      if (
+        winner.start_verse_id <= jackpotEndId && 
+        winner.start_verse_id >= jackpotStartId &&
+        winner.end_verse_id >= jackpotStartId &&
+        winner.end_verse_id <= jackpotEndId
+      ) {
+        // Jackpot won by this player
+        const jpWin = await awardJackpot(tx, {
+          userId: winner.user_id,
+          roundId,
+          betId: winner.id
+        });
+      }
+    }
 
     // Zero-Winner Branch: Refund all stakes
     if (winners.length === 0) {

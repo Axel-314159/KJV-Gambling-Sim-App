@@ -69,6 +69,11 @@ export interface AdminGameConfigResponse {
   } | null;
 }
 
+export interface AdminJackpotConfigResponse {
+  jackpotStartVerseId: number;
+  jackpotEndVerseId: number;
+}
+
 export interface KjvVerse {
   verseId: number; // 1..31102
   testament: 'OLD' | 'NEW';

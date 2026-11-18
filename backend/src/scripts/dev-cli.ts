@@ -337,7 +337,7 @@ async function main() {
       }
       default:
         console.log(`
-KJV Verse Arena — Dev CLI
+JSTW — Dev CLI
 
 Usage: npm run cli -- <command>
 

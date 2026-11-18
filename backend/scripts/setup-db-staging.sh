@@ -121,6 +121,8 @@ CREATE TABLE IF NOT EXISTS game_config (
     max_registered_players   INT CHECK (max_registered_players IS NULL OR max_registered_players >= 1),
     min_stake_per_verse      INT NOT NULL DEFAULT 20 CHECK (min_stake_per_verse >= 1),
     jackpot_balance          BIGINT NOT NULL DEFAULT 0 CHECK (jackpot_balance >= 0),
+    jackpot_start_verse_id   INT NOT NULL DEFAULT -1,
+    jackpot_end_verse_id     INT NOT NULL DEFAULT -1,
     pending_next_opens_at    TIMESTAMPTZ,
     pending_next_closes_at   TIMESTAMPTZ,
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -199,6 +201,7 @@ CREATE TABLE IF NOT EXISTS wallet_ledger (
                        'SLIP_EDIT_REFUND',
                        'ROUND_WINNING',
                        'ROUND_NO_WINNER_REFUND',
+                       'JACKPOT_WINNING',
                        'ADMIN_ADJUSTMENT'
                    )),
     amount         BIGINT NOT NULL,

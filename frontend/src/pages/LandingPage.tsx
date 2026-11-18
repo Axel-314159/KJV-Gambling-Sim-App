@@ -119,6 +119,9 @@ export function LandingPage({ user }: { user: UserProfile | null }) {
             <p>
               If every segment in a round collides and no winners remain, all players have their wagers refunded in full.
             </p>
+            <p>
+              <strong className="text-amber-300">Jackpot Verses:</strong> A secret segment of verse is chosen at random. If one of your winning segments completely contains the jackpot verses, you win the running jackpot!
+            </p>
           </div>
         </section>
       </div>
