@@ -91,18 +91,28 @@ export async function settleRound(roundId: number) {
       return { bet: item.bet, payout: floorPayout, remainder };
     });
 
-    let distributed = allocations.reduce((acc, a) => acc + a.payout, 0n);
-    let leftover = totalPot - distributed;
+    // Compute proportional Gerah payouts (floored)
+    const totalPaidOut = allocations.reduce((acc, alloc) => acc + alloc.payout, 0n);
 
-    allocations.sort((a, b) => {
-      if (b.remainder !== a.remainder) return b.remainder > a.remainder ? 1 : -1;
-      return a.bet.id.localeCompare(b.bet.id);
-    });
+    // Route fractional Gerah remainder into the running Jackpot
+    const remainderGerahs = totalPot - totalPaidOut;
+    if (remainderGerahs > 0n) {
+      const { rows: jpRows } = await tx.query(
+        `UPDATE game_config
+          SET jackpot_balance = jackpot_balance + $1, updated_at = NOW()
+          WHERE id = 1
+          RETURNING jackpot_balance`,
+        [Number(remainderGerahs)]
+      );
 
-    for (let i = 0; i < Number(leftover); i++) {
-      allocations[i].payout += 1n;
+      await tx.query(
+        `INSERT INTO jackpot_ledger (round_id, entry_type, amount, balance_after)
+          VALUES ($1, 'ROUND_DUST', $2, $3)`,
+        [roundId, Number(remainderGerahs), Number(jpRows[0].jackpot_balance)]
+      );
     }
-
+    
+    // distribute payouts to winners 
     for (const alloc of allocations) {
       const payoutNum = Number(alloc.payout);
       await tx.query(`UPDATE bets SET outcome = 'WON', payout = $1 WHERE id = $2`, [payoutNum, alloc.bet.id]);

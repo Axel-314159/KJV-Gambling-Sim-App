@@ -111,7 +111,7 @@ export async function kjvRoutes(app: FastifyInstance) {
       max_segment_length: 100,
       min_segments: 1,
       max_segments: 5,
-      min_stake_per_verse: 1,
+      min_stake_per_verse: 20,
     };
 
     const { segmentCount: k, totalLength: total } = body;

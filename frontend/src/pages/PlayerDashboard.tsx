@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 import type { LedgerEntry, UserProfile } from '../types/api';
+import { formatCurrency, formatSignedCurrency } from '../lib/currency';
 
 export function PlayerDashboard({ user }: { user: UserProfile }) {
   const { data: ledger } = useQuery<LedgerEntry[]>({
@@ -14,6 +15,15 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <h1 className="text-xl font-bold">Player Profile: {user.username}</h1>
         <p className="text-sm text-slate-400">{user.email} • Role: {user.role}</p>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-slate-400">Available Wallet Balance</div>
+          <div className="text-2xl font-mono font-bold text-amber-300 mt-1">
+            {formatCurrency(user.walletBalance)}
+          </div>
+        </div>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
@@ -33,9 +43,9 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
                 <td className="py-2.5 font-medium">{entry.entryType.replaceAll('_', ' ')}</td>
                 <td className="py-2.5 text-slate-400">{entry.roundId ?? '—'}</td>
                 <td className={`py-2.5 text-right font-mono ${entry.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {entry.amount >= 0 ? `+${entry.amount}` : entry.amount}
+                  {formatSignedCurrency(entry.amount)}
                 </td>
-                <td className="py-2.5 text-right font-mono">{entry.balanceAfter}</td>
+                <td className="py-2.5 text-right font-mono">{formatCurrency(entry.balanceAfter)}</td>
               </tr>
             ))}
           </tbody>

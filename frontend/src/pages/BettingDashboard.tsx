@@ -5,6 +5,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import type { ActiveRoundState, BetSegment, KjvVerse, UserProfile, AutoSelectRequest } from '../types/api';
 import { useServerCountdown } from '../hooks/useServerClock';
 import { KjvExplorer } from '../components/KjvExplorer';
+import { GERAHS_PER_SHEKEL, formatCurrency, toGerahs } from '../lib/currency';
 
 export function BettingDashboard({ user: _user }: { user: UserProfile }) {
   const queryClient = useQueryClient();
@@ -124,7 +125,7 @@ export function BettingDashboard({ user: _user }: { user: UserProfile }) {
         startLabel: `${startVerse.bookName} ${startVerse.chapter}:${startVerse.verse}`,
         endLabel: `${endVerse.bookName} ${endVerse.chapter}:${endVerse.verse}`,
         verseLength: length,
-        stake: length * round.minStakePerVerse,
+        stake: toGerahs(length * round.minStakePerVerse, 0)
       },
     ]);
   };
@@ -158,7 +159,8 @@ export function BettingDashboard({ user: _user }: { user: UserProfile }) {
                 {' '}• Verse Budget: <strong className="text-amber-300">{round.maxVersesPerPlayer} verses</strong>
               </>
             )}
-            {' '}• Min Stake: <strong className="text-slate-200">{round.minStakePerVerse} SHK/verse</strong>
+            {' '}• Min Stake: <strong className="text-slate-200">{formatCurrency(round.minStakePerVerse)}</strong>
+            {' '}• Running Jackpot: <strong className="text-emerald-300">{formatCurrency(state.jackpotBalance)}</strong>
           </p>
         </div>
 
@@ -281,16 +283,19 @@ export function BettingDashboard({ user: _user }: { user: UserProfile }) {
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          min={minSegStake}
+                          min={Math.max(1, Math.ceil((seg.verseLength * round.minStakePerVerse) / GERAHS_PER_SHEKEL))}
+                          step={1}
                           disabled={isSlipLocked}
-                          value={seg.stake}
+                          value={Math.floor((Number(seg.stake) || 0) / GERAHS_PER_SHEKEL)}
                           onChange={(e) => {
-                            const val = Math.max(1, parseInt(e.target.value, 10) || 0);
-                            setDraftSegments(draftSegments.map((s, i) => (i === idx ? { ...s, stake: val } : s)));
+                            const wholeShekels = Math.max(1, Math.floor(Number(e.target.value) || 0));
+                            setDraftSegments(
+                              draftSegments.map((s, i) => (i === idx ? { ...s, stake: toGerahs(wholeShekels, 0) } : s))
+                            );
                           }}
                           className="w-24 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-right font-mono text-sm"
                         />
-                        <span className="text-xs text-slate-400">SHK</span>
+                        <span className="text-xs text-slate-400">Shekels</span>
                         {!isSlipLocked && (
                           <button
                             onClick={() => setDraftSegments(draftSegments.filter((_, i) => i !== idx))}
@@ -310,7 +315,7 @@ export function BettingDashboard({ user: _user }: { user: UserProfile }) {
           <div className="border-t border-slate-800 pt-4 space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Total Slip Wager</span>
-              <span className="font-mono font-bold text-amber-300">{totalDraftStake.toLocaleString()} Shekels</span>
+              <span className="font-mono font-bold text-amber-300">{formatCurrency(totalDraftStake)}</span>
             </div>
 
             {!playerState.isRegistered && isBettingOpen ? (

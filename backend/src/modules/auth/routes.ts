@@ -128,7 +128,7 @@ export async function authRoutes(app: FastifyInstance) {
       const userId = tokRows[0].user_id;
       const { rows: userRows } = await tx.query(
         `UPDATE users
-         SET password_hash = $1, status = 'ACTIVE', wallet_balance = 1000
+         SET password_hash = $1, status = 'ACTIVE', wallet_balance = 20000
          WHERE id = $2 AND status = 'AWAITING_PASSWORD'
          RETURNING id`,
         [passwordHash, userId]
@@ -137,7 +137,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       await tx.query(
         `INSERT INTO wallet_ledger (user_id, entry_type, amount, balance_after)
-         VALUES ($1, 'INITIAL_GRANT', 1000, 1000)`,
+         VALUES ($1, 'INITIAL_GRANT', 20000, 20000)`,
         [userId]
       );
 

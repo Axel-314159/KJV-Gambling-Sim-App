@@ -4,6 +4,7 @@ import type { UserProfile } from '../types/api';
 import { apiFetch } from '../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { Footer } from './Footer';
+import { formatCurrency } from '../lib/currency';
 
 export function Layout({ user }: { user: UserProfile | null }) {
   const location = useLocation();
@@ -63,7 +64,7 @@ export function Layout({ user }: { user: UserProfile | null }) {
               <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full">
                 <Coins className="w-4 h-4 text-amber-400" />
                 <span className="font-mono font-semibold text-amber-300">
-                  {user.walletBalance.toLocaleString()} Shekels
+                  {formatCurrency(user.walletBalance)}
                 </span>
               </div>
               <span className="text-sm text-slate-400 hidden md:inline">{user.username}</span>
