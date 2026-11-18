@@ -40,7 +40,7 @@ export async function sendActivationEmail(
     text: `Hello ${username},\n\nA moderator has approved your account. Set your password and claim your ${grantLabel} here:\n${link}\n\nThis link expires in 72 hours.`,
     html: `
       <p>Hello <strong>${username}</strong>,</p>
-      <p>A moderator has approved your KJV Verse Arena account.</p>
+      <p>A moderator has approved your JSTW account.</p>
       <p><a href="${link}">Click here to set your password and claim your <strong>${grantLabel}</strong></a></p>
       <p style="color:#666;font-size:12px;">Or copy this link into your browser: ${link}<br/>This link expires in 72 hours.</p>
     `,

@@ -261,7 +261,7 @@ export function BettingDashboard({ user: _user }: { user: UserProfile }) {
             ) : (
               <div className="space-y-2.5">
                 {draftSegments.map((seg, idx) => {
-                  const minSegStake = seg.verseLength * round.minStakePerVerse;
+                  const minSegStake = seg.verseLength * (round.minStakePerVerse / GERAHS_PER_SHEKEL); // min stake in SHEKELS
                   const isSegStakeTooLow = (Number(seg.stake) || 0) < minSegStake;
 
                   return (

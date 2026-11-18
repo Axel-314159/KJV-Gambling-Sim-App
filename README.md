@@ -1,5 +1,5 @@
 # KJV Gambling Simulator Web Application
-### [v1.0.1](https://semver.org)
+### [v0.0.0](https://semver.org)
 
 ## Setting up Local Development Server
 

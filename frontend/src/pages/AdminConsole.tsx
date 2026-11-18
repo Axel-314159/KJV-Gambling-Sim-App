@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Unlock, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { apiFetch, ApiError } from '../lib/api';
-import type { AdminGameConfigResponse, UserProfile } from '../types/api';
+import type { AdminGameConfigResponse, UserProfile, AdminJackpotConfigResponse } from '../types/api';
 import { splitGerahs, toGerahs } from '../lib/currency';
 
 function toLocalDatetimeInput(iso: string | null): string {
@@ -104,6 +104,8 @@ export function AdminConsole({ currentUser }: { currentUser: UserProfile }) {
           </div>
         )}
       </div>
+
+      {currentUser.role === 'ADMIN' && <JackpotConfigEditor />}
     </div>
   );
 }
@@ -401,6 +403,99 @@ function RoundConfigEditor() {
           >
             <Save className="w-4 h-4" />
             {saveMutation.isPending ? 'Saving...' : isLocked ? 'Save Config for Next Round' : 'Update Upcoming Round Config'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+
+function JackpotConfigEditor() {
+  const queryClient = useQueryClient();
+  const [jackpotStartVerseId, setJackpotStartVerseId] = useState(-1);
+  const [jackpotEndVerseId, setJackpotEndVerseId] = useState(-1);
+  const [_statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const {
+    data: cfgData
+  } = useQuery<AdminJackpotConfigResponse>({
+    queryKey: ['adminJackpotConfig'],
+    queryFn: () => apiFetch<AdminJackpotConfigResponse>('/admin/jackpot'),
+  });
+
+  useEffect(() => {
+    if (!cfgData) return;
+
+    setJackpotStartVerseId(cfgData.jackpotStartVerseId);
+    setJackpotEndVerseId(cfgData.jackpotEndVerseId);
+
+  }, [cfgData]);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{ message: string }>('/admin/jackpot', {
+        method: 'PUT',
+        body: JSON.stringify({
+          jackpotStartVerseId,
+          jackpotEndVerseId
+        }),
+      }),
+    onSuccess: (res) => {
+      setStatusMsg({ type: 'ok', text: res.message });
+      queryClient.invalidateQueries({ queryKey: ['adminJackpotConfig'] });
+    },
+    onError: (err: ApiError) => setStatusMsg({ type: 'err', text: err.message }),
+  });
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+
+      <h2 className="font-semibold">Jackpot Verse Configuration</h2>
+
+      <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        saveMutation.mutate();
+      }}
+      className="space-y-4 text-sm"
+      >
+        {/* Segment Length & Count Limits */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Start Verse ID</label>
+            <input
+              type="number"
+              min={1}
+              max={31102}
+              value={jackpotStartVerseId}
+              onChange={(e) => setJackpotStartVerseId(Number(e.target.value))}
+              required
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">End Verse ID</label>
+            <input
+              type="number"
+              min={1}
+              max={31102}
+              value={jackpotEndVerseId}
+              onChange={(e) => setJackpotEndVerseId(Number(e.target.value))}
+              required
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            type="submit"
+            disabled={saveMutation.isPending}
+            className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-bold px-5 py-2.5 rounded-lg transition"
+          >
+            {'Update Jackpot'}
           </button>
         </div>
       </form>

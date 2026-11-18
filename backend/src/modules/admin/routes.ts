@@ -24,6 +24,14 @@ const configUpdateSchema = z
     message: 'Min segments cannot exceed max segments.',
   });
 
+
+const jackpotUpdateSchema = z
+  .object({
+    jackpotStartVerseId: z.number().int(),
+    jackpotEndVerseId: z.number().int()
+  });
+
+
 export async function adminRoutes(app: FastifyInstance) {
   app.get('/api/admin/users', { preHandler: requireRole(['ADMIN']) }, async () => {
     const { rows } = await pool.query(
@@ -256,6 +264,48 @@ export async function adminRoutes(app: FastifyInstance) {
           ? 'Updated active REGISTRATION_OPEN round and future round defaults.'
           : 'Active round is locked; configuration saved for the next round.',
       };
+    } catch (err: any) {
+      if (err.statusCode) {
+        return reply.status(err.statusCode).send({ code: err.code, message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  /* Jackpotc verse setting GET */
+  app.get('/api/admin/jackpot', { preHandler: requireRole(['ADMIN']) }, async () => {
+    const { rows: cfgRows } = await pool.query(`SELECT * FROM game_config WHERE id = 1`);
+    const cfg = cfgRows[0];
+
+    return {
+      jackpotStartVerseId: cfg.jackpot_start_verse_id,
+      jackpotEndVerseId: cfg.jackpot_end_verse_id
+    };
+  });
+
+  /* Jackpot verse setting PUT */
+  app.put('/api/admin/jackpot', { preHandler: requireRole(['ADMIN']) }, async (req, reply) => {
+    const body = jackpotUpdateSchema.parse(req.body);
+
+    if (body.jackpotStartVerseId && body.jackpotEndVerseId) {
+      if (body.jackpotStartVerseId > body.jackpotEndVerseId) {
+        return reply.status(400).send({
+          code: 'INVALID_WINDOW',
+          message: 'Jackpot end verse must be after start verse.',
+        });
+      }
+    }
+
+    try {
+      const _appliedToGameConfig = await withTransaction(async (tx) => {
+        const { rows: _roundRows } = await tx.query(
+          `UPDATE game_config
+           SET jackpot_start_verse_id = $1, jackpot_end_verse_id = $2 
+           WHERE id = 1`,
+          [body.jackpotStartVerseId, body.jackpotEndVerseId]
+        );
+      });
+
     } catch (err: any) {
       if (err.statusCode) {
         return reply.status(err.statusCode).send({ code: err.code, message: err.message });
