@@ -15,7 +15,7 @@ const mailer = env.SMTP_HOST
     })
   : null;
 
-async function sendActivationEmail(
+export async function sendActivationEmail(
   email: string, 
   username: string, 
   rawToken: string,
@@ -158,7 +158,7 @@ export async function authRoutes(app: FastifyInstance) {
       const userId = tokRows[0].user_id;
       const { rows: userRows } = await tx.query(
         `UPDATE users
-         SET password_hash = $1, status = 'ACTIVE', wallet_balance = 2000
+         SET password_hash = $1, status = 'ACTIVE', wallet_balance = wallet_balance + initial_grant
          WHERE id = $2 AND status = 'AWAITING_PASSWORD'
          RETURNING id, initial_grant, wallet_balance`,
         [passwordHash, userId]
@@ -199,7 +199,7 @@ export async function authRoutes(app: FastifyInstance) {
       secure: env.NODE_ENV === 'production',
       maxAge: 14 * 24 * 60 * 60,
     });
-    return { message: 'Account activated with 1,000 Shekels.' };
+    return { message: 'Account activated.' };
   });
 
   // 6. Password Login
