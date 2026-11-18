@@ -95,7 +95,7 @@ export function SignupPage() {
           <h1 className="text-xl font-bold text-amber-400">Request Player Account</h1>
           {submitted ? (
             <div className="text-sm text-emerald-300 bg-emerald-950/40 border border-emerald-800 p-4 rounded-lg">
-              Registration received. Once a Moderator approves your request, you will receive an email link to set your password and claim your <strong>1,000 starting Shekels</strong>.
+              Registration received. Once a Moderator approves your request, you will receive an email link to set your password and claim your starting grant of Shekels.
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -153,7 +153,7 @@ export function ActivatePasswordPage() {
     <AuthShell>
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
         <form onSubmit={handleActivate} className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-          <h1 className="text-xl font-bold text-amber-400">Set Password & Claim 1,000 Shekels</h1>
+          <h1 className="text-xl font-bold text-amber-400">Set Password & Claim Your Starting Grant</h1>
           {error && <div className="text-sm text-rose-400 bg-rose-950/50 p-2.5 rounded">{error}</div>}
           <input
             type="password"
