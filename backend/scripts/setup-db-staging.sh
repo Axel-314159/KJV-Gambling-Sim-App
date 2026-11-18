@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Configurable via environment variables (defaults shown)
-DB_NAME="${DB_NAME:-kjv_game_test}"
-DB_USER="${DB_USER:-kjv_game_test_user}"
+DB_NAME="${DB_NAME:-kjv_game_dev}"
+DB_USER="${DB_USER:-kjv_game_dev_user}"
 DB_PASS="${DB_PASS:-cascodeTest2026}"
 DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-5432}"
@@ -47,6 +47,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${DB_USER};
 EOF
 
 # Stage 2: Application schema executed directly as $DB_USER over TCP
+# Note: All monetary values are stored in atomic Gerahs (20 Gerahs = 1 Shekel).
 echo "[2/2] Creating tables, constraints, indexes, and default game configuration..."
 PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 <<'EOF'
 -- 1. Static KJV Reference Table (31,102 verses)
@@ -64,7 +65,7 @@ CREATE TABLE IF NOT EXISTS kjv_verses (
 CREATE INDEX IF NOT EXISTS idx_kjv_book_chap ON kjv_verses (book_number, chapter, verse);
 CREATE INDEX IF NOT EXISTS idx_kjv_fts ON kjv_verses USING GIN (search_vector);
 
--- 2. Users, Roles & Password Activation State
+-- 2. Users, Roles & Password Activation State (wallet_balance in Gerahs)
 CREATE TABLE IF NOT EXISTS users (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username         VARCHAR(32) UNIQUE NOT NULL,
@@ -106,7 +107,8 @@ CREATE TABLE IF NOT EXISTS account_tokens (
     used_at     TIMESTAMPTZ
 );
 
--- 5. Persistent Admin Game Rules & Schedule Singleton
+-- 5. Persistent Admin Game Rules, Schedule & Running Jackpot Singleton
+-- min_stake_per_verse defaults to 20 Gerahs (1 Shekel); jackpot_balance stored in Gerahs
 CREATE TABLE IF NOT EXISTS game_config (
     id                       INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     default_open_time        VARCHAR(5) NOT NULL DEFAULT '08:00',
@@ -116,7 +118,8 @@ CREATE TABLE IF NOT EXISTS game_config (
     min_segments             INT NOT NULL DEFAULT 1 CHECK (min_segments >= 1),
     max_segments             INT NOT NULL DEFAULT 5 CHECK (max_segments >= min_segments AND max_segments <= 50),
     max_registered_players   INT CHECK (max_registered_players IS NULL OR max_registered_players >= 1),
-    min_stake_per_verse      INT NOT NULL DEFAULT 1 CHECK (min_stake_per_verse >= 1),
+    min_stake_per_verse      INT NOT NULL DEFAULT 20 CHECK (min_stake_per_verse >= 1),
+    jackpot_balance          BIGINT NOT NULL DEFAULT 0 CHECK (jackpot_balance >= 0),
     pending_next_opens_at    TIMESTAMPTZ,
     pending_next_closes_at   TIMESTAMPTZ,
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -124,7 +127,7 @@ CREATE TABLE IF NOT EXISTS game_config (
 
 INSERT INTO game_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
--- 6. Daily Rounds (Snapshotted Rules + State Machine)
+-- 6. Daily Rounds (Snapshotted Rules + State Machine; total_pot & min_stake_per_verse in Gerahs)
 CREATE TABLE IF NOT EXISTS rounds (
     id                      SERIAL PRIMARY KEY,
     round_date              DATE UNIQUE NOT NULL,
@@ -142,7 +145,7 @@ CREATE TABLE IF NOT EXISTS rounds (
     min_segments            INT NOT NULL DEFAULT 1,
     max_segments            INT NOT NULL DEFAULT 5,
     max_registered_players  INT,
-    min_stake_per_verse     INT NOT NULL DEFAULT 1
+    min_stake_per_verse     INT NOT NULL DEFAULT 20
 );
 
 -- 7. Round Registrations & 1-Edit Submission Counter
@@ -155,7 +158,7 @@ CREATE TABLE IF NOT EXISTS round_registrations (
     PRIMARY KEY (round_id, user_id)
 );
 
--- 8. Player Bets (Segments with Self-Overlap Exclusion)
+-- 8. Player Bets (Segments with Self-Overlap Exclusion; stake & payout in Gerahs)
 CREATE TABLE IF NOT EXISTS bets (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     round_id         INT NOT NULL REFERENCES rounds(id),
@@ -182,7 +185,7 @@ CREATE TABLE IF NOT EXISTS bets (
 
 CREATE INDEX IF NOT EXISTS idx_bets_round ON bets (round_id);
 
--- 9. Immutable Double-Entry Shekel Ledger
+-- 9. Immutable Double-Entry Player Gerah Ledger
 CREATE TABLE IF NOT EXISTS wallet_ledger (
     id             BIGSERIAL PRIMARY KEY,
     user_id        UUID NOT NULL REFERENCES users(id),
@@ -203,6 +206,20 @@ CREATE TABLE IF NOT EXISTS wallet_ledger (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ledger_user ON wallet_ledger (user_id, id DESC);
+
+-- 10. Immutable Running Jackpot Gerah Ledger
+CREATE TABLE IF NOT EXISTS jackpot_ledger (
+    id             BIGSERIAL PRIMARY KEY,
+    round_id       INT REFERENCES rounds(id),
+    user_id        UUID REFERENCES users(id),
+    entry_type     VARCHAR(24) NOT NULL
+                   CHECK (entry_type IN ('ROUND_DUST', 'JACKPOT_PAYOUT', 'ADMIN_ADJUSTMENT')),
+    amount         BIGINT NOT NULL,
+    balance_after  BIGINT NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_jackpot_ledger_round ON jackpot_ledger (round_id);
 EOF
 
 echo ""

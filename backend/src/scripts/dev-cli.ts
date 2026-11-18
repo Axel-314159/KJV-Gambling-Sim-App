@@ -157,7 +157,7 @@ async function cmdSeedBots(count = 5) {
 
       const { rows } = await tx.query(
         `INSERT INTO users (username, email, password_hash, role, status, wallet_balance)
-         VALUES ($1, $2, $3, 'PLAYER', 'ACTIVE', 1000)
+         VALUES ($1, $2, $3, 'PLAYER', 'ACTIVE', 20000)
          ON CONFLICT (username) DO UPDATE SET status = 'ACTIVE'
          RETURNING id, wallet_balance`,
         [username, email, defaultHash]
@@ -166,13 +166,13 @@ async function cmdSeedBots(count = 5) {
       const bot = rows[0];
       botIds.push(bot.id);
 
-      // Top up bot if balance dropped below 200 Shekels during repeated testing
-      if (bot.wallet_balance < 200) {
-        const topUp = 1000 - bot.wallet_balance;
-        await tx.query(`UPDATE users SET wallet_balance = 1000 WHERE id = $1`, [bot.id]);
+      // Top up bot if balance dropped below 1000 Gerahs (50 shekels) during repeated testing
+      if (bot.wallet_balance < 1000) {
+        const topUp = 20000 - bot.wallet_balance;
+        await tx.query(`UPDATE users SET wallet_balance = 20000 WHERE id = $1`, [bot.id]);
         await tx.query(
           `INSERT INTO wallet_ledger (user_id, entry_type, amount, balance_after)
-           VALUES ($1, 'ADMIN_ADJUSTMENT', $2, 1000)`,
+           VALUES ($1, 'ADMIN_ADJUSTMENT', $2, 20000)`,
           [bot.id, topUp]
         );
       }

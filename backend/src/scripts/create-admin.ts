@@ -14,14 +14,14 @@ async function main() {
   await withTransaction(async (tx) => {
     const { rows } = await tx.query(
       `INSERT INTO users (username, email, password_hash, role, status, wallet_balance)
-       VALUES ($1, $2, $3, 'ADMIN', 'ACTIVE', 1000)
+       VALUES ($1, $2, $3, 'ADMIN', 'ACTIVE', 20000)
        RETURNING id, username, role`,
       [username.trim(), email.trim().toLowerCase(), passwordHash]
     );
 
     await tx.query(
       `INSERT INTO wallet_ledger (user_id, entry_type, amount, balance_after)
-       VALUES ($1, 'INITIAL_GRANT', 1000, 1000)`,
+       VALUES ($1, 'INITIAL_GRANT', 20000, 20000)`,
       [rows[0].id]
     );
 

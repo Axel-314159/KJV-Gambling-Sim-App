@@ -54,8 +54,11 @@ export async function roundRoutes(app: FastifyInstance) {
       [r.id, userId]
     );
 
+    const { rows: cfgRows } = await pool.query(`SELECT jackpot_balance FROM game_config WHERE id = 1`);
+
     return {
       serverTimeUtc: new Date().toISOString(),
+      jackpotBalance: Number(cfgRows[0]?.jackpot_balance ?? 0),
       round: {
         id: r.id,
         roundDate: new Date(r.round_date).toISOString().slice(0, 10),
@@ -127,7 +130,16 @@ export async function roundRoutes(app: FastifyInstance) {
     const userId = req.currentUser!.id;
 
     const sorted = [...segments].sort((a, b) => a.startVerseId - b.startVerseId);
+    // segment validation loop
     for (let i = 0; i < sorted.length; i++) {
+
+      if (sorted[i].stake % 20 !== 0) {
+        throw Object.assign(
+          new Error('Wagers must be placed in whole Shekels.'),
+          { statusCode: 400, code: 'WHOLE_SHEKELS_ONLY' }
+        );
+      }
+
       if (sorted[i].endVerseId < sorted[i].startVerseId) {
         return reply.status(400).send({ code: 'INVALID_RANGE', message: 'End verse must be >= start verse.' });
       }

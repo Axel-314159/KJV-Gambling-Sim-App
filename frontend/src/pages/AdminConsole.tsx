@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Unlock, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { apiFetch, ApiError } from '../lib/api';
 import type { AdminGameConfigResponse, UserProfile } from '../types/api';
+import { splitGerahs, toGerahs } from '../lib/currency';
 
 function toLocalDatetimeInput(iso: string | null): string {
   if (!iso) return '';
@@ -72,7 +73,8 @@ function RoundConfigEditor() {
   const [minSegments, setMinSegments] = useState(1);
   const [maxSegments, setMaxSegments] = useState(5);
   const [maxRegisteredPlayers, setMaxRegisteredPlayers] = useState<string>('');
-  const [minStakePerVerse, setMinStakePerVerse] = useState(1);
+  const [minStakeShekels, setMinStakeShekels] = useState(1);
+  const [minStakeGerahs, setMinStakeGerahs] = useState(0);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const {
@@ -90,6 +92,7 @@ function RoundConfigEditor() {
     const { defaultConfig, activeRound } = cfgData;
     const source = activeRound && !activeRound.isLocked ? activeRound : defaultConfig;
 
+    const splitMinStake = splitGerahs(source.minStakePerVerse);
     setDefaultOpenTime(defaultConfig.defaultOpenTime);
     setDefaultCloseTime(defaultConfig.defaultCloseTime);
     setMinSegmentLength(source.minSegmentLength);
@@ -97,7 +100,8 @@ function RoundConfigEditor() {
     setMinSegments(source.minSegments);
     setMaxSegments(source.maxSegments);
     setMaxRegisteredPlayers(source.maxRegisteredPlayers !== null ? String(source.maxRegisteredPlayers) : '');
-    setMinStakePerVerse(source.minStakePerVerse);
+    setMinStakeShekels(splitMinStake.shekels);
+    setMinStakeGerahs(splitMinStake.gerahs);
 
     if (activeRound && !activeRound.isLocked) {
       setNextOpensLocal(toLocalDatetimeInput(activeRound.bettingOpensAt));
@@ -120,7 +124,7 @@ function RoundConfigEditor() {
           minSegments: Number(minSegments),
           maxSegments: Number(maxSegments),
           maxRegisteredPlayers: maxRegisteredPlayers.trim() === '' ? null : Number(maxRegisteredPlayers),
-          minStakePerVerse: Number(minStakePerVerse),
+          minStakePerVerse: Math.max(1, toGerahs(Number(minStakeShekels), Number(minStakeGerahs))),
           nextBettingOpensAt: nextOpensLocal ? new Date(nextOpensLocal).toISOString() : null,
           nextBettingClosesAt: nextClosesLocal ? new Date(nextClosesLocal).toISOString() : null,
         }),
@@ -311,16 +315,35 @@ function RoundConfigEditor() {
             />
           </div>
 
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Min Stake / Verse (SHK)</label>
-            <input
-              type="number"
-              min={1}
-              value={minStakePerVerse}
-              onChange={(e) => setMinStakePerVerse(Number(e.target.value))}
-              required
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono"
-            />
+          <div className="col-span-2">
+            <label className="block text-xs text-slate-400 mb-1">Min Stake / Verse (Shekels + Gerahs)</label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  value={minStakeShekels}
+                  onChange={(e) => setMinStakeShekels(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  required
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 pr-12 font-mono"
+                />
+                <span className="text-[11px] text-slate-500 absolute right-2.5 top-2.5">SHK</span>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  max={19}
+                  value={minStakeGerahs}
+                  onChange={(e) =>
+                    setMinStakeGerahs(Math.min(19, Math.max(0, Math.floor(Number(e.target.value) || 0))))
+                  }
+                  required
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 pr-12 font-mono"
+                />
+                <span className="text-[11px] text-slate-500 absolute right-2.5 top-2.5">GRH</span>
+              </div>
+            </div>
           </div>
         </div>
 

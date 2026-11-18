@@ -14,6 +14,7 @@ export interface UserProfile {
 }
 export interface ActiveRoundState {
   serverTimeUtc: string;
+  jackpotBalance: number;
   round: {
     id: number;
     roundDate: string;
