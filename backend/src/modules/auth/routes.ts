@@ -15,8 +15,20 @@ const mailer = env.SMTP_HOST
     })
   : null;
 
-async function sendActivationEmail(email: string, username: string, rawToken: string) {
+async function sendActivationEmail(
+  email: string, 
+  username: string, 
+  rawToken: string,
+  initialGrantGerahs = 2000
+) {
   const link = `${env.APP_BASE_URL}/activate?token=${rawToken}`;
+  const shekels = Math.floor(initialGrantGerahs / 20);
+  const gerahs = initialGrantGerahs % 20;
+  const grantLabel =
+    gerahs === 0
+      ? `${shekels.toLocaleString()} SHK`
+      : `${shekels.toLocaleString()} SHK, ${gerahs} GRH`;
+  
   if (!mailer) {
     console.log(`\n[DEV EMAIL] Activation link for ${username} (${email}):\n${link}\n`);
     return;
@@ -25,7 +37,13 @@ async function sendActivationEmail(email: string, username: string, rawToken: st
     from: env.SMTP_FROM,
     to: email,
     subject: 'Your JSTW Account is Approved',
-    text: `Hello ${username},\n\nA moderator has approved your account. Set your password and claim your 1,000 starting Shekels here:\n${link}\n\nThis link expires in 72 hours.`,
+    text: `Hello ${username},\n\nA moderator has approved your account. Set your password and claim your ${grantLabel} here:\n${link}\n\nThis link expires in 72 hours.`,
+    html: `
+      <p>Hello <strong>${username}</strong>,</p>
+      <p>A moderator has approved your KJV Verse Arena account.</p>
+      <p><a href="${link}">Click here to set your password and claim your <strong>${grantLabel}</strong></a></p>
+      <p style="color:#666;font-size:12px;">Or copy this link into your browser: ${link}<br/>This link expires in 72 hours.</p>
+    `,
   });
 }
 
@@ -70,19 +88,26 @@ export async function authRoutes(app: FastifyInstance) {
     return rows;
   });
 
+  const approveBodySchema = z.object({
+    initialGrantGerahs: z.number().int().min(0).default(2000),
+  });
+
   // 4. Moderator Approve User -> Generate Single-Use Password Setup Link
   app.post('/api/mod/users/:id/approve', { preHandler: requireRole(['MODERATOR', 'ADMIN']) }, async (req, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { initialGrantGerahs } = approveBodySchema.parse(req.body ?? {});
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = hashToken(rawToken);
 
     const user = await withTransaction(async (tx) => {
       const { rows } = await tx.query(
         `UPDATE users
-         SET status = 'AWAITING_PASSWORD', approved_by = $1
-         WHERE id = $2 AND status = 'PENDING_APPROVAL'
-         RETURNING id, username, email`,
-        [req.currentUser!.id, id]
+         SET status = 'AWAITING_PASSWORD', 
+            approved_by = $1,
+            initial_grant = $2
+         WHERE id = $3 AND status = 'PENDING_APPROVAL'
+         RETURNING id, username, email, initial_grant`,
+        [req.currentUser!.id, initialGrantGerahs, id]
       );
       if (!rows.length) return null;
 
@@ -91,15 +116,20 @@ export async function authRoutes(app: FastifyInstance) {
          VALUES ($1, $2, 'SET_PASSWORD', NOW() + INTERVAL '72 hours')`,
         [tokenHash, id]
       );
-      return rows[0];
+      return { ...rows[0], rawToken };
     });
 
     if (!user) {
-      return reply.status(404).send({ code: 'NOT_FOUND', message: 'Pending user not found.' });
+      return reply.status(404).send({ code: 'NOT_FOUND', message: 'User not found or already approved.' });
     }
 
-    await sendActivationEmail(user.email, user.username, rawToken);
-    return { message: 'User approved and activation email dispatched.' };
+    await sendActivationEmail(
+      user.email, 
+      user.username, 
+      rawToken,
+      Number(user.initial_grant)
+    );
+    return { message: `Approved ${user.username} with ${Math.floor(initialGrantGerahs / 20)} Shekels.` };
   });
 
   // 5. Post-Approval Password Setup -> Credits 1,000 Starting Shekels & Logs In
@@ -128,18 +158,27 @@ export async function authRoutes(app: FastifyInstance) {
       const userId = tokRows[0].user_id;
       const { rows: userRows } = await tx.query(
         `UPDATE users
-         SET password_hash = $1, status = 'ACTIVE', wallet_balance = 20000
+         SET password_hash = $1, status = 'ACTIVE', wallet_balance = 2000
          WHERE id = $2 AND status = 'AWAITING_PASSWORD'
-         RETURNING id`,
+         RETURNING id, initial_grant, wallet_balance`,
         [passwordHash, userId]
       );
-      if (!userRows.length) return false;
 
-      await tx.query(
-        `INSERT INTO wallet_ledger (user_id, entry_type, amount, balance_after)
-         VALUES ($1, 'INITIAL_GRANT', 20000, 20000)`,
-        [userId]
-      );
+      if (!userRows.length) {
+        throw Object.assign(new Error('Account is not awaiting password activation.'), {
+          statusCode: 400,
+          code: 'INVALID_ACCOUNT_STATE',
+        });
+      }
+
+      const grantAmount = Number(userRows[0].initial_grant);
+      if (grantAmount > 0) {
+        await tx.query(
+          `INSERT INTO wallet_ledger (user_id, entry_type, amount, balance_after)
+          VALUES ($1, 'INITIAL_GRANT', $2, $3)`,
+          [userId, grantAmount, Number(userRows[0].wallet_balance)]
+        );
+      }
 
       await tx.query(
         `INSERT INTO sessions (id, user_id, expires_at)

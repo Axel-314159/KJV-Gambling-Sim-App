@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS users (
     max_bet_override BIGINT,
     wallet_balance   BIGINT NOT NULL DEFAULT 0 CHECK (wallet_balance >= 0),
     approved_by      UUID REFERENCES users(id),
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    initial_grant    BIGINT NOT NULL DEFAULT 2000 CHECK (initial_grant >= 0),
 );
 
 -- 3. Active HTTP Cookie Sessions

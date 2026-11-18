@@ -20,9 +20,19 @@ export function AdminConsole({ currentUser }: { currentUser: UserProfile }) {
     queryFn: () => apiFetch<UserProfile[]>('/mod/pending-users'),
   });
 
+  const [grantShekelsByUser, setGrantShekelsByUser] = useState<Record<string, number>>({});
+  const [approvalFeedback, setApprovalFeedback] = useState<string | null>(null);
+
   const approveMutation = useMutation({
-    mutationFn: (userId: string) => apiFetch(`/mod/users/${userId}/approve`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pendingUsers'] }),
+    mutationFn: ({ userId, initialGrantGerahs }: { userId: string; initialGrantGerahs: number }) =>
+      apiFetch<{ message: string }>(`/mod/users/${userId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ initialGrantGerahs }),
+      }),
+    onSuccess: (res) => {
+      setApprovalFeedback(res.message);
+      queryClient.invalidateQueries({ queryKey: ['pendingUsers'] });
+    },
   });
 
   return (
@@ -35,26 +45,62 @@ export function AdminConsole({ currentUser }: { currentUser: UserProfile }) {
 
       {currentUser.role === 'ADMIN' && <RoundConfigEditor />}
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-        <h2 className="font-semibold mb-3">Pending Account Approvals</h2>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+        <h2 className="font-semibold">Pending Account Approvals</h2>
+
+        {approvalFeedback && (
+          <div className="bg-emerald-950/50 border border-emerald-800 text-emerald-200 px-3 py-2 rounded-lg text-xs">
+            {approvalFeedback}
+          </div>
+        )}
+
         {!pendingUsers?.length ? (
           <p className="text-sm text-slate-400">No accounts awaiting approval.</p>
         ) : (
           <div className="divide-y divide-slate-800">
-            {pendingUsers.map((u) => (
-              <div key={u.id} className="py-3 flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{u.username}</div>
-                  <div className="text-xs text-slate-400">{u.email}</div>
+            {pendingUsers.map((u) => {
+              const shekels = grantShekelsByUser[u.id] ?? 100;
+
+              return (
+                <div key={u.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{u.username}</div>
+                    <div className="text-xs text-slate-400">{u.email}</div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <span>Initial Grant:</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={shekels}
+                        onChange={(e) => {
+                          const val = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                          setGrantShekelsByUser((prev) => ({ ...prev, [u.id]: val }));
+                        }}
+                        className="w-24 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-right font-mono text-sm text-amber-300"
+                      />
+                      <span>Shekels</span>
+                    </label>
+
+                    <button
+                      onClick={() =>
+                        approveMutation.mutate({
+                          userId: u.id,
+                          initialGrantGerahs: toGerahs(shekels, 0),
+                        })
+                      }
+                      disabled={approveMutation.isPending}
+                      className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 text-xs font-bold px-3 py-1.5 rounded transition"
+                    >
+                      Approve &amp; Send Password Link
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => approveMutation.mutate(u.id)}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-3 py-1.5 rounded"
-                >
-                  Approve & Send Password Link
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
