@@ -111,6 +111,7 @@ export interface LedgerEntry {
   amount: number;
   balanceAfter: number;
   createdAt: string;
+  verseRange: string | null;
 }
 
 export interface WeeklyStatsResponse {
@@ -119,7 +120,7 @@ export interface WeeklyStatsResponse {
   totalRoundsSettled: number;
   totalShekelsWagered: number;
   mostContestedBooks: { bookName: string; collisionCount: number }[];
-  topWinners: { username: string; netShekelsWon: number; survivingSegments: number }[];
+  topWinners: { username: string; netGerahsWon: number; survivingSegments: number }[];
 }
 
 export interface KjvBookMeta {

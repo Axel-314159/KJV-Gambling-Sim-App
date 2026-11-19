@@ -29,23 +29,41 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <h2 className="font-semibold text-lg mb-3">Shekel Ledger History</h2>
         <table className="w-full text-sm text-left">
-          <thead className="text-xs uppercase text-slate-400 border-b border-slate-800">
-            <tr>
-              <th className="py-2">Event</th>
-              <th className="py-2">Round</th>
-              <th className="py-2 text-right">Amount</th>
-              <th className="py-2 text-right">Balance After</th>
+          <thead>
+            <tr className="border-b border-slate-800 text-xs uppercase text-slate-400">
+              <th className="py-2.5 px-3 text-left">Date</th>
+              <th className="py-2.5 px-3 text-left">Type</th>
+              <th className="py-2.5 px-3 text-left">Round</th>
+              <th className="py-2.5 px-3 text-left">Verse Range</th>
+              <th className="py-2.5 px-3 text-right">Amount</th>
+              <th className="py-2.5 px-3 text-right">Balance After</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60">
+          <tbody className="divide-y divide-slate-800/60 text-sm">
             {ledger?.map((entry) => (
-              <tr key={entry.id}>
-                <td className="py-2.5 font-medium">{entry.entryType.replaceAll('_', ' ')}</td>
-                <td className="py-2.5 text-slate-400">{entry.roundId ?? '—'}</td>
-                <td className={`py-2.5 text-right font-mono ${entry.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <tr key={entry.id} className="hover:bg-slate-800/30">
+                <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
+                  {new Date(entry.createdAt).toLocaleString()}
+                </td>
+                <td className="py-2.5 px-3 font-medium text-slate-200">
+                  {entry.entryType.replace(/_/g, ' ')}
+                </td>
+                <td className="py-2.5 px-3 text-slate-400">
+                  {entry.roundId ? `#${entry.roundId}` : '—'}
+                </td>
+                <td className="py-2.5 px-3 text-slate-200">
+                  {entry.verseRange ?? <span className="text-slate-500">—</span>}
+                </td>
+                <td
+                  className={`py-2.5 px-3 font-mono text-right whitespace-nowrap ${
+                    entry.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
                   {formatSignedCurrency(entry.amount)}
                 </td>
-                <td className="py-2.5 text-right font-mono">{formatCurrency(entry.balanceAfter)}</td>
+                <td className="py-2.5 px-3 font-mono text-right text-slate-300 whitespace-nowrap">
+                  {formatCurrency(entry.balanceAfter)}
+                </td>
               </tr>
             ))}
           </tbody>

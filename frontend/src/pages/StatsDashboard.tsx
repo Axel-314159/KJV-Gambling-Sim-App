@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 import type { WeeklyStatsResponse } from '../types/api';
+import { formatSignedCurrency } from '../lib/currency';
 
 export function StatsDashboard() {
   const { data: stats } = useQuery<WeeklyStatsResponse>({
@@ -27,7 +28,7 @@ export function StatsDashboard() {
             {stats.topWinners.map((w, i) => (
               <li key={w.username} className="flex justify-between border-b border-slate-800 pb-2">
                 <span>#{i + 1} {w.username} ({w.survivingSegments} segments)</span>
-                <span className="font-mono text-emerald-400">+{w.netShekelsWon} SHK</span>
+                <span className={w.netGerahsWon >= 0 ?"font-mono text-emerald-400": "font-mono text-rose-400"}>{ formatSignedCurrency(w.netGerahsWon) }</span> 
               </li>
             ))}
           </ul>
