@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { pool } from '../../db/pool.js';
 import { requireActivePlayer } from '../../plugins/auth.js';
+import { RawBet } from '../../modules/settlement/engine.js';
 
 function formatVerseRange(row: {
   start_book: string | null;
@@ -59,6 +60,15 @@ export async function statsRoutes(app: FastifyInstance) {
         LIMIT 100`,
       [req.currentUser!.id]
     );
+
+    const { rows: bets } = await pool.query(
+      `SELECT verse_length
+       FROM bets
+       WHERE id = $1`,
+      [rows[0].bet_id]
+    );
+    const bet = bets[0];
+
     const ledger = rows.map((r) => ({
       id: Number(r.id),
       roundId: r.round_id,
@@ -68,6 +78,7 @@ export async function statsRoutes(app: FastifyInstance) {
       balanceAfter: Number(r.balance_after),
       createdAt: r.created_at,
       verseRange: formatVerseRange(r),
+      verseCount: bet.verse_length
     }));
     return ledger;
   });

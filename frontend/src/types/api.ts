@@ -112,6 +112,7 @@ export interface LedgerEntry {
   balanceAfter: number;
   createdAt: string;
   verseRange: string | null;
+  verseCount: number | null;
 }
 
 export interface WeeklyStatsResponse {

@@ -71,26 +71,7 @@ export async function kjvRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  // 3. Auto-Select Random Non-Overlapping Segments
-  // app.post('/api/kjv/auto-select', { preHandler: requireActivePlayer }, async (req, reply) => {
-  //   const body = z
-  //     .object({
-  //       testament: z.enum(['OLD', 'NEW']).optional(),
-  //       bookNumbers: z.array(z.number().int().min(1).max(66)).optional(),
-  //       customRange: z.tuple([z.number().int().min(1).max(31102), z.number().int().min(1).max(31102)]).optional(),
-  //       segmentCount: z.number().int().min(1).max(5),
-  //       totalLength: z.number().int().min(3).max(500),
-  //     })
-  //     .parse(req.body);
-
-  //   const { segmentCount: k, totalLength: total } = body;
-  //   if (total < k * 3 || total > k * 100) {
-  //     return reply.status(400).send({
-  //       code: 'INVALID_DIMENSIONS',
-  //       message: `Total length (${total}) cannot be split into ${k} segments of 3–100 verses.`,
-  //     });
-  //   }
-// Replace the top of app.post('/api/kjv/auto-select', ...) with:
+  
   app.post('/api/kjv/auto-select', { preHandler: requireActivePlayer }, async (req, reply) => {
     const body = z
       .object({

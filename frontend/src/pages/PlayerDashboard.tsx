@@ -35,6 +35,7 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
               <th className="py-2.5 px-3 text-left">Type</th>
               <th className="py-2.5 px-3 text-left">Round</th>
               <th className="py-2.5 px-3 text-left">Verse Range</th>
+              <th className="py-2.5 px-3 text-left">Verse Count</th>
               <th className="py-2.5 px-3 text-right">Amount</th>
               <th className="py-2.5 px-3 text-right">Balance After</th>
             </tr>
@@ -53,6 +54,9 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
                 </td>
                 <td className="py-2.5 px-3 text-slate-200">
                   {entry.verseRange ?? <span className="text-slate-500">—</span>}
+                </td>
+                <td className="py-2.5 px-3 text-slate-200">
+                  {entry.verseCount ?? <span className="text-slate-500">---</span>}
                 </td>
                 <td
                   className={`py-2.5 px-3 font-mono text-right whitespace-nowrap ${

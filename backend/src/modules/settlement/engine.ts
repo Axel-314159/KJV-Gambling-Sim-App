@@ -7,7 +7,7 @@ export interface JackpotAwardResult {
   winnerNewBalanceGerahs: bigint;
 }
 
-interface RawBet {
+export interface RawBet {
   id: string;
   user_id: string;
   start_verse_id: number;
