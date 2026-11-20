@@ -11,6 +11,7 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
   const queryClient = useQueryClient();
   const [draftSegments, setDraftSegments] = useState<BetSegment[]>([]);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [bulkWagerShekels, setBulkWagerShekels] = useState<string>('');
 
   const { data: state, isLoading } = useQuery<ActiveRoundState>({
     queryKey: ['activeRound'],
@@ -189,6 +190,60 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
     ]);
   };
 
+  const totalMinSlipShekels = draftSegments.reduce( (sum, seg) =>
+    sum + Math.max(1, Math.ceil((seg.verseLength * round.minStakePerVerse) / GERAHS_PER_SHEKEL)), 0 );
+
+  const handleDistributeShekels = () => {
+    if (!canEditDraft || draftSegments.length === 0) return;
+
+    const targetTotal = Math.floor(Number(bulkWagerShekels) || 0);
+    if (targetTotal < totalMinSlipShekels) {
+      setFeedbackError(
+        `Total wager must be at least ${totalMinSlipShekels} Shekels to cover minimum stakes across all selected segments.`
+      );
+      return;
+    }
+
+    // 1. Guarantee each segment's minimum whole-Shekel stake first
+    const minPerSegment = draftSegments.map((seg) =>
+      Math.max(1, Math.ceil((seg.verseLength * round.minStakePerVerse) / GERAHS_PER_SHEKEL))
+    );
+    const surplus = targetTotal - totalMinSlipShekels;
+    const totalVerses = draftSegments.reduce((sum, s) => sum + s.verseLength, 0);
+
+    // 2. Distribute remaining Shekels proportionally by verseLength (largest-remainder method)
+    const allocations = draftSegments.map((seg, idx) => {
+      const exactBonus =
+        totalVerses > 0
+          ? (surplus * seg.verseLength) / totalVerses
+          : surplus / draftSegments.length;
+      const flooredBonus = Math.floor(exactBonus);
+      return {
+        idx,
+        shekels: minPerSegment[idx] + flooredBonus,
+        remainder: exactBonus - flooredBonus,
+      };
+    });
+
+    const allocatedSum = allocations.reduce((sum, a) => sum + a.shekels, 0);
+    const leftover = targetTotal - allocatedSum;
+
+    const byRemainder = [...allocations].sort((a, b) => b.remainder - a.remainder);
+    for (let i = 0; i < leftover; i++) {
+      byRemainder[i % byRemainder.length].shekels += 1;
+    }
+
+    const finalByIdx = new Map(allocations.map((a) => [a.idx, a.shekels]));
+
+    setFeedbackError(null);
+    setDraftSegments(
+      draftSegments.map((seg, idx) => ({
+        ...seg,
+        stake: toGerahs(finalByIdx.get(idx) ?? minPerSegment[idx], 0),
+      }))
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. Round Schedule & Status Banner */}
@@ -312,7 +367,47 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
                 </div>
               </div>
             </div>
+            
+            {/* Bulk wager distribution section */}
+            {draftSegments.length > 0 && canEditDraft && (
+              <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <label htmlFor="bulk-wager-input" className="text-slate-400 font-medium">
+                    Distribute Total Wager
+                  </label>
+                  <span className="text-slate-500">Min {totalMinSlipShekels} SHK</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="bulk-wager-input"
+                    type="number"
+                    min={totalMinSlipShekels}
+                    step={1}
+                    placeholder={`${totalMinSlipShekels}`}
+                    value={bulkWagerShekels}
+                    onChange={(e) => setBulkWagerShekels(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleDistributeShekels();
+                      }
+                    }}
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-right font-mono text-sm text-slate-100"
+                  />
+                  <span className="text-xs text-slate-400">Shekels</span>
+                  <button
+                    type="button"
+                    onClick={handleDistributeShekels}
+                    disabled={!bulkWagerShekels || Math.floor(Number(bulkWagerShekels)) < totalMinSlipShekels}
+                    className="bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-semibold text-xs px-3 py-2 rounded transition"
+                  >
+                    Distribute
+                  </button>
+                </div>
+              </div>
+            )}
 
+            {/* Segments list */}
             {draftSegments.length === 0 ? (
               <div className="py-12 text-center text-sm text-slate-500 border border-dashed border-slate-800 rounded-lg">
                 No segments staged yet. Pick {round.minSegments}–{round.maxSegments} ranges ({round.minSegmentLength}–{round.maxSegmentLength} verses each) from the KJV navigator or use Auto-Select.
@@ -343,7 +438,7 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          min={minSegShekels}
+                          min={0}
                           step={1}
                           disabled={!canEditDraft}
                           value={Math.floor((Number(seg.stake) || 0) / GERAHS_PER_SHEKEL)}
