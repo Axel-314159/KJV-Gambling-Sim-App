@@ -60,7 +60,12 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/signup', async (req, reply) => {
     const body = z
       .object({
-        username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/),
+        username: z
+          .string()
+          .trim()
+          .min(3, 'Username must be at least 3 characters')
+          .max(40, 'Username must be at most 40 characters')
+          .regex(/^[a-zA-Z0-9_]+$/, 'Username may only contain letters, numbers, underscores, and hyphens'),
         email: z.string().trim().email().max(255),
       })
       .parse(req.body);

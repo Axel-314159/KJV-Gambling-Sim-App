@@ -44,6 +44,8 @@ export function LoginPage() {
           <input
             type="text"
             placeholder="Username"
+            minLength={3}
+            maxLength={40}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm"
