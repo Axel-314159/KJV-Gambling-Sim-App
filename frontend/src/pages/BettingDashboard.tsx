@@ -7,7 +7,7 @@ import { useServerCountdown } from '../hooks/useServerClock';
 import { KjvExplorer } from '../components/KjvExplorer';
 import { GERAHS_PER_SHEKEL, formatCurrency, toGerahs } from '../lib/currency';
 
-export function BettingDashboard({ user: user }: { user: UserProfile }) {
+export function BettingDashboard({ user }: { user: UserProfile }) {
   const queryClient = useQueryClient();
   const [draftSegments, setDraftSegments] = useState<BetSegment[]>([]);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
@@ -18,16 +18,48 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
     refetchInterval: 15_000,
   });
 
-  // useEffect(() => {
-  //   if (state?.playerState.activeBets.length) {
-  //     setDraftSegments(state.playerState.activeBets);
-  //   }
-  // }, [state?.playerState.activeBets]);
+  const round = state?.round;
+  const playerState = state?.playerState;
+  const submissionCount = playerState?.submissionCount ?? 0;
+  const draftStorageKey = round && user ? `kjv_draft_slip_${round.id}_${user.id}` : null;
+
+  // 1. Hydrate from server if the player already submitted an initial slip (for their 1 edit)
+  useEffect(() => {
+    if (playerState?.activeBets.length) {
+      setDraftSegments(playerState.activeBets);
+    }
+  }, [playerState?.activeBets]);
+
+  // 2. Restore saved pre-submission draft when the round loads
+  useEffect(() => {
+    if (!draftStorageKey || submissionCount > 0) return;
+    const saved = localStorage.getItem(draftStorageKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setDraftSegments(parsed);
+        }
+      } catch {
+        localStorage.removeItem(draftStorageKey);
+      }
+    }
+  }, [draftStorageKey, submissionCount]);
+
+  // 3. Save draft changes locally whenever the player edits segments before submitting
+  useEffect(() => {
+    if (!draftStorageKey || submissionCount > 0) return;
+    if (draftSegments.length > 0) {
+      localStorage.setItem(draftStorageKey, JSON.stringify(draftSegments));
+    } else {
+      localStorage.removeItem(draftStorageKey);
+    }
+  }, [draftSegments, draftStorageKey, submissionCount]);
 
   const targetDeadline =
-    state?.round.status === 'REGISTRATION_OPEN'
-      ? state.round.bettingOpensAt
-      : state?.round.bettingClosesAt;
+    round?.status === 'REGISTRATION_OPEN'
+      ? round.bettingOpensAt
+      : round?.bettingClosesAt;
 
   const countdown = useServerCountdown(state?.serverTimeUtc, targetDeadline);
 
@@ -53,10 +85,12 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
         }),
       }),
     onSuccess: () => {
+      if (draftStorageKey) {
+        localStorage.removeItem(draftStorageKey);
+      }
       setFeedbackError(null);
       queryClient.invalidateQueries({ queryKey: ['activeRound'] });
       queryClient.invalidateQueries({ queryKey: ['me'] });
-      localStorage.removeItem(draftStorageKey);
     },
     onError: (err: ApiError) => setFeedbackError(err.message),
   });
@@ -74,39 +108,42 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
     onError: (err: ApiError) => setFeedbackError(err.message),
   });
 
-  if (isLoading || !state) {
+  // Early return sits AFTER all hooks
+  if (isLoading || !state || !round || !playerState) {
     return <div className="text-slate-400">Loading round schedule...</div>;
   }
 
-  const { round, playerState } = state;
   const isPreBetting = round.status === 'REGISTRATION_OPEN';
   const isBettingOpen = round.status === 'BETTING_OPEN';
-  const hasEditsRemaining = (playerState?.submissionCount ?? 0) < 2;
-
-  // Players can construct/edit their local draft during both REGISTRATION_OPEN and BETTING_OPEN
+  const hasEditsRemaining = submissionCount < 2;
   const canEditDraft = (isPreBetting || isBettingOpen) && hasEditsRemaining;
-  
+
   const totalDraftVerses = draftSegments.reduce((sum, s) => sum + s.verseLength, 0);
   const totalDraftStake = draftSegments.reduce((sum, s) => sum + (Number(s.stake) || 0), 0);
   const maxVerses = round.maxVersesPerPlayer ?? 500;
-  // Players can only submit once BETTING_OPEN starts, they are registered, and the slip is valid
-  const canSubmitSlip =
-    isBettingOpen &&
-    Boolean(playerState?.isRegistered) &&
-    hasEditsRemaining &&
-    draftSegments.length >= round.minSegments &&
-    draftSegments.length <= round.maxSegments &&
-    (round.maxVersesPerPlayer === null || totalDraftVerses <= round.maxVersesPerPlayer) &&
-    totalDraftStake <= user.walletBalance;
-  const isSlipLocked = playerState.submissionCount >= 2 || !isBettingOpen || !playerState.isRegistered;
-  const isRegistrationFull =
-    round.maxRegisteredPlayers !== null && round.registeredCount >= round.maxRegisteredPlayers;
 
-  const hasInvalidStake = draftSegments.some(
-    (s) => (Number(s.stake) || 0) < s.verseLength * round.minStakePerVerse
-  );
+  const hasInvalidStake = draftSegments.some((s) => {
+    const minSegShekels = Math.max(
+      1,
+      Math.ceil((s.verseLength * round.minStakePerVerse) / GERAHS_PER_SHEKEL)
+    );
+    return (Number(s.stake) || 0) < toGerahs(minSegShekels, 0);
+  });
+
   const isSegmentCountValid =
     draftSegments.length >= round.minSegments && draftSegments.length <= round.maxSegments;
+
+  const canSubmitSlip =
+    isBettingOpen &&
+    Boolean(playerState.isRegistered) &&
+    hasEditsRemaining &&
+    isSegmentCountValid &&
+    !hasInvalidStake &&
+    (round.maxVersesPerPlayer === null || totalDraftVerses <= round.maxVersesPerPlayer) &&
+    totalDraftStake <= user.walletBalance;
+
+  const isRegistrationFull =
+    round.maxRegisteredPlayers !== null && round.registeredCount >= round.maxRegisteredPlayers;
 
   const handleAddSegment = (first: KjvVerse, second: KjvVerse) => {
     const startVerse = first.verseId <= second.verseId ? first : second;
@@ -134,7 +171,10 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
       setFeedbackError(`Adding this segment exceeds your ${round.maxVersesPerPlayer}-verse budget.`);
       return;
     }
-    
+
+    const minSegGerahs = length * round.minStakePerVerse;
+    const defaultShekels = Math.max(1, Math.ceil(minSegGerahs / GERAHS_PER_SHEKEL));
+
     setFeedbackError(null);
     setDraftSegments([
       ...draftSegments,
@@ -144,38 +184,10 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
         startLabel: `${startVerse.bookName} ${startVerse.chapter}:${startVerse.verse}`,
         endLabel: `${endVerse.bookName} ${endVerse.chapter}:${endVerse.verse}`,
         verseLength: length,
-        stake: toGerahs(length * round.minStakePerVerse, 0)
+        stake: toGerahs(defaultShekels, 0),
       },
     ]);
   };
-
-  const draftStorageKey = `kjv_draft_slip_${round.id}_${user.id}`;
-
-  // Restore saved pre-submission draft when the round loads
-  useEffect(() => {
-    if ((playerState?.submissionCount ?? 0) > 0) return; // Server already holds submitted bets
-    const saved = localStorage.getItem(draftStorageKey);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setDraftSegments(parsed);
-        }
-      } catch {
-        localStorage.removeItem(draftStorageKey);
-      }
-    }
-  }, [draftStorageKey, playerState?.submissionCount]);
-
-  // Save draft changes locally whenever the player edits segments before submitting
-  useEffect(() => {
-    if ((playerState?.submissionCount ?? 0) > 0) return;
-    if (draftSegments.length > 0) {
-      localStorage.setItem(draftStorageKey, JSON.stringify(draftSegments));
-    } else {
-      localStorage.removeItem(draftStorageKey);
-    }
-  }, [draftSegments, draftStorageKey, playerState?.submissionCount]);
 
   return (
     <div className="space-y-6">
@@ -270,9 +282,9 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h2 className="font-semibold text-lg">Your Round Slip</h2>
               <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300">
-                {playerState.submissionCount === 0 && 'Initial Submission'}
-                {playerState.submissionCount === 1 && '1 Edit Remaining'}
-                {playerState.submissionCount === 2 && 'Locked (Final Slip)'}
+                {submissionCount === 0 && 'Initial Submission'}
+                {submissionCount === 1 && '1 Edit Remaining'}
+                {submissionCount === 2 && 'Locked (Final Slip)'}
               </span>
             </div>
 
@@ -308,8 +320,9 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
             ) : (
               <div className="space-y-2.5">
                 {draftSegments.map((seg, idx) => {
-                  const minSegStake = seg.verseLength * (round.minStakePerVerse / GERAHS_PER_SHEKEL); // min stake in SHEKELS
-                  const isSegStakeTooLow = (Number(seg.stake) || 0) < minSegStake;
+                  const minSegGerahs = seg.verseLength * round.minStakePerVerse;
+                  const minSegShekels = Math.max(1, Math.ceil(minSegGerahs / GERAHS_PER_SHEKEL));
+                  const isSegStakeTooLow = (Number(seg.stake) || 0) < toGerahs(minSegShekels, 0);
 
                   return (
                     <div
@@ -323,14 +336,14 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
                           {seg.startLabel ?? `#${seg.startVerseId}`} → {seg.endLabel ?? `#${seg.endVerseId}`}
                         </div>
                         <div className="text-xs text-slate-400">
-                          {seg.verseLength} verses • min {minSegStake} SHK
+                          {seg.verseLength} verses • min {minSegShekels} SHK
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          min={Math.max(1, Math.ceil((seg.verseLength * round.minStakePerVerse) / GERAHS_PER_SHEKEL))}
+                          min={minSegShekels}
                           step={1}
                           disabled={!canEditDraft}
                           value={Math.floor((Number(seg.stake) || 0) / GERAHS_PER_SHEKEL)}
@@ -364,7 +377,7 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
               <span className="text-slate-400">Total Slip Wager</span>
               <span className="font-mono font-bold text-amber-300">{formatCurrency(totalDraftStake)}</span>
             </div>
-            
+
             {isPreBetting && (
               <div className="bg-amber-950/40 border border-amber-800/70 text-amber-200 text-xs rounded-lg px-3 py-2">
                 Betting has not opened yet. You can build your slip now; your final verse budget will be
@@ -377,7 +390,7 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
               <div className="text-xs text-amber-300 bg-amber-950/40 border border-amber-800/60 p-3 rounded-lg">
                 You did not register before betting opened for today&apos;s round. Registration for the next round opens after settlement.
               </div>
-            ) : playerState.submissionCount >= 2 ? (
+            ) : submissionCount >= 2 ? (
               <div className="flex items-center justify-center gap-2 text-sm text-slate-400 bg-slate-950 py-3 rounded-lg border border-slate-800">
                 <Lock className="w-4 h-4" /> Final slip submitted. Awaiting settlement.
               </div>
@@ -392,7 +405,7 @@ export function BettingDashboard({ user: user }: { user: UserProfile }) {
                   ? 'Submitting Slip...'
                   : isPreBetting
                   ? `Betting Opens at ${new Date(round.bettingOpensAt).toLocaleTimeString()}`
-                  : !playerState?.isRegistered
+                  : !playerState.isRegistered
                   ? 'Register for Round to Submit'
                   : !hasEditsRemaining
                   ? 'Maximum Slip Submissions Reached'
