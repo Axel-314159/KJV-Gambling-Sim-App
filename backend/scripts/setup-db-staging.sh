@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_kjv_fts ON kjv_verses USING GIN (search_vector);
 -- 2. Users, Roles & Password Activation State (wallet_balance in Gerahs)
 CREATE TABLE IF NOT EXISTS users (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username         VARCHAR(32) UNIQUE NOT NULL,
+    username         VARCHAR(40) UNIQUE NOT NULL,
     email            VARCHAR(255) UNIQUE NOT NULL,
     password_hash    TEXT,
     role             VARCHAR(16) NOT NULL DEFAULT 'PLAYER'

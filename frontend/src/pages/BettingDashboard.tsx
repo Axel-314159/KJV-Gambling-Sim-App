@@ -233,7 +233,7 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
             <div className="mt-3">
               {playerState.isRegistered ? (
                 <span className="inline-flex items-center gap-1.5 text-sm text-emerald-400 font-medium">
-                  <CheckCircle2 className="w-4 h-4" /> Registered for Tomorrow
+                  <CheckCircle2 className="w-4 h-4" /> Registered for Upcoming Round
                 </span>
               ) : isRegistrationFull ? (
                 <span className="text-xs text-rose-400 font-medium">
