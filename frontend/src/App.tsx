@@ -8,7 +8,13 @@ import { BettingDashboard } from './pages/BettingDashboard';
 import { PlayerDashboard } from './pages/PlayerDashboard';
 import { StatsDashboard } from './pages/StatsDashboard';
 import { AdminConsole } from './pages/AdminConsole';
-import { LoginPage, SignupPage, ActivatePasswordPage } from './pages/AuthPages';
+import { 
+  LoginPage, 
+  SignupPage, 
+  ActivatePasswordPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+} from './pages/AuthPages';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -24,6 +30,7 @@ function AppRoutes() {
         return null;
       }
     },
+    retry: false,
   });
 
   if (isLoading) {
@@ -37,9 +44,14 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Standalone Auth Routes */}
-      <Route path="/login" element={user ? <Navigate to="/arena" /> : <LoginPage />} />
-      <Route path="/signup" element={user ? <Navigate to="/arena" /> : <SignupPage />} />
+      <Route
+        path="/login"
+        element={user ? <Navigate to="/" replace /> : <LoginPage />}
+      />
+      <Route path="/signup" element={<SignupPage />} />
       <Route path="/activate" element={<ActivatePasswordPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Shared Layout: Public Homepage (/) + Protected Game Dashboards */}
       <Route element={<Layout user={user ?? null} />}>

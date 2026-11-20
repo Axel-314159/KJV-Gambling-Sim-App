@@ -47,6 +47,28 @@ export async function sendActivationEmail(
   });
 }
 
+async function sendPasswordResetEmail(email: string, username: string, rawToken: string) {
+  const link = `${env.APP_BASE_URL}/reset-password?token=${rawToken}`;
+
+  if (!mailer) {
+    console.log(`\n[DEV EMAIL] Password reset link for ${username} (${email}):\n${link}\n`);
+    return;
+  }
+
+  await mailer.sendMail({
+    from: env.SMTP_FROM,
+    to: email,
+    subject: 'Reset Your JSTW Password',
+    text: `Hello ${username},\n\nWe received a request to reset your password. Choose a new password here:\n${link}\n\nThis link expires in 1 hour. If you did not request this, you can safely ignore this email.`,
+    html: `
+      <p>Hello <strong>${username}</strong>,</p>
+      <p>We received a request to reset your JSTW password.</p>
+      <p><a href="${link}">Click here to set a new password</a></p>
+      <p style="color:#666;font-size:12px;">Or copy this link into your browser: ${link}<br/>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
+    `,
+  });
+}
+
 export async function authRoutes(app: FastifyInstance) {
   // 1. Current session profile
   app.get('/api/auth/me', async (req, reply) => {
@@ -251,5 +273,119 @@ export async function authRoutes(app: FastifyInstance) {
     }
     reply.clearCookie('sid', { path: '/' });
     return { message: 'Signed out.' };
+  });
+
+  /* Password Reset Flow */
+  // 1. Request a password reset link by email
+  app.post('/api/auth/forgot-password', async (req) => {
+    const { email } = z
+      .object({
+        email: z.string().trim().email('Please enter a valid email address.'),
+      })
+      .parse(req.body);
+
+    const genericResponse = {
+      message:
+        'If an active account is registered with that email address, a password reset link has been sent.',
+    };
+
+    const { rows } = await pool.query<{ id: string; username: string; email: string }>(
+      `SELECT id, username, email
+       FROM users
+       WHERE LOWER(email) = LOWER($1)
+         AND status = 'ACTIVE'
+       LIMIT 1`,
+      [email]
+    );
+
+    // Always return the same response so attackers cannot enumerate registered emails
+    if (!rows.length) {
+      return genericResponse;
+    }
+
+    const user = rows[0];
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    await withTransaction(async (tx) => {
+      // Invalidate any prior unused reset tokens for this user
+      await tx.query(
+        `UPDATE account_tokens
+         SET used_at = NOW()
+         WHERE user_id = $1
+           AND purpose = 'RESET_PASSWORD'
+           AND used_at IS NULL`,
+        [user.id]
+      );
+
+      await tx.query(
+        `INSERT INTO account_tokens (token_hash, user_id, purpose, expires_at)
+         VALUES ($1, $2, 'RESET_PASSWORD', NOW() + INTERVAL '1 hour')`,
+        [tokenHash, user.id]
+      );
+    });
+
+    await sendPasswordResetEmail(user.email, user.username, rawToken);
+
+    return genericResponse;
+  });
+
+  // 2. Consume the token and update the password
+  app.post('/api/auth/reset-password', async (req) => {
+    const { token, password } = z
+      .object({
+        token: z.string().min(16, 'Invalid reset token.'),
+        password: z
+          .string()
+          .min(8, 'Password must be at least 8 characters.')
+          .max(128, 'Password must be at most 128 characters.'),
+      })
+      .parse(req.body);
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    // Use the exact same password hashing helper/library as your /api/auth/activate route
+    const passwordHash = await hash(password);
+
+    await withTransaction(async (tx) => {
+      const { rows: tokenRows } = await tx.query<{ user_id: string }>(
+        `UPDATE account_tokens
+         SET used_at = NOW()
+         WHERE token_hash = $1
+           AND purpose = 'RESET_PASSWORD'
+           AND used_at IS NULL
+           AND expires_at > NOW()
+         RETURNING user_id`,
+        [tokenHash]
+      );
+
+      if (!tokenRows.length) {
+        throw Object.assign(
+          new Error('This password reset link is invalid or has expired. Please request a new one.'),
+          { statusCode: 400, code: 'INVALID_OR_EXPIRED_TOKEN' }
+        );
+      }
+
+      const userId = tokenRows[0].user_id;
+
+      const { rows: userRows } = await tx.query(
+        `UPDATE users
+         SET password_hash = $1
+         WHERE id = $2 AND status = 'ACTIVE'
+         RETURNING id`,
+        [passwordHash, userId]
+      );
+
+      if (!userRows.length) {
+        throw Object.assign(new Error('Account is not active.'), {
+          statusCode: 400,
+          code: 'INVALID_ACCOUNT_STATE',
+        });
+      }
+
+      // Revoke existing active sessions for security
+      await tx.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+    });
+
+    return { message: 'Your password has been updated. You may now sign in.' };
   });
 }
