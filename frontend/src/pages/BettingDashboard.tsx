@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2, CheckCircle2, Lock, AlertTriangle } from 'lucide-react';
 import { apiFetch, ApiError } from '../lib/api';
@@ -24,10 +24,17 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
   const submissionCount = playerState?.submissionCount ?? 0;
   const draftStorageKey = round && user ? `kjv_draft_slip_${round.id}_${user.id}` : null;
 
+  const hasHydratedActiveBets = useRef(false);
+
   // 1. Hydrate from server if the player already submitted an initial slip (for their 1 edit)
   useEffect(() => {
-    if (playerState?.activeBets.length) {
+    if (
+      !hasHydratedActiveBets.current &&
+      playerState?.activeBets &&
+      playerState.activeBets.length > 0
+    ) {
       setDraftSegments(playerState.activeBets);
+      hasHydratedActiveBets.current = true;
     }
   }, [playerState?.activeBets]);
 
@@ -92,6 +99,7 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
       setFeedbackError(null);
       queryClient.invalidateQueries({ queryKey: ['activeRound'] });
       queryClient.invalidateQueries({ queryKey: ['me'] });
+      hasHydratedActiveBets.current = false;
     },
     onError: (err: ApiError) => setFeedbackError(err.message),
   });
@@ -122,6 +130,11 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
   const totalDraftVerses = draftSegments.reduce((sum, s) => sum + s.verseLength, 0);
   const totalDraftStake = draftSegments.reduce((sum, s) => sum + (Number(s.stake) || 0), 0);
   const maxVerses = round.maxVersesPerPlayer ?? 500;
+  const committedStake = (playerState.activeBets ?? []).reduce(
+    (sum, b) => sum + (Number(b.stake) || 0),
+    0
+  );
+  const availableGerahs = user.walletBalance + committedStake;
 
   const hasInvalidStake = draftSegments.some((s) => {
     const minSegShekels = Math.max(
@@ -131,8 +144,9 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
     return (Number(s.stake) || 0) < toGerahs(minSegShekels, 0);
   });
 
-  const isSegmentCountValid =
-    draftSegments.length >= round.minSegments && draftSegments.length <= round.maxSegments;
+  const isSegmentCountValid = draftSegments.length >= round.minSegments && draftSegments.length <= round.maxSegments;
+  const isVerseBudgetValid = round.maxVersesPerPlayer === null || totalDraftVerses <= round.maxVersesPerPlayer;
+  const isBalanceValid = totalDraftStake <= availableGerahs;
 
   const canSubmitSlip =
     isBettingOpen &&
@@ -140,11 +154,28 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
     hasEditsRemaining &&
     isSegmentCountValid &&
     !hasInvalidStake &&
-    (round.maxVersesPerPlayer === null || totalDraftVerses <= round.maxVersesPerPlayer) &&
-    totalDraftStake <= user.walletBalance;
-
-  const isRegistrationFull =
+    isVerseBudgetValid &&
+    isBalanceValid;
+    const isRegistrationFull =
     round.maxRegisteredPlayers !== null && round.registeredCount >= round.maxRegisteredPlayers;
+
+  const submitDisabledReason = isPreBetting
+    ? `Betting Opens at ${new Date(round.bettingOpensAt).toLocaleTimeString()}`
+    : !playerState.isRegistered
+    ? 'Register for Round to Submit'
+    : !hasEditsRemaining
+    ? 'Maximum Slip Submissions Reached'
+    : draftSegments.length < round.minSegments
+    ? `Select at Least ${round.minSegments} Segment${round.minSegments === 1 ? '' : 's'}`
+    : draftSegments.length > round.maxSegments
+    ? `Maximum ${round.maxSegments} Segments Allowed`
+    : !isVerseBudgetValid
+    ? `Exceeds ${round.maxVersesPerPlayer}-Verse Budget`
+    : hasInvalidStake
+    ? 'Segment Stake Below Minimum'
+    : !isBalanceValid
+    ? `Insufficient Balance (Max ${formatCurrency(availableGerahs)})`
+    : null;
 
   const handleAddSegment = (first: KjvVerse, second: KjvVerse) => {
     const startVerse = first.verseId <= second.verseId ? first : second;
@@ -498,13 +529,7 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
               >
                 {submitSlipMutation.isPending
                   ? 'Submitting Slip...'
-                  : isPreBetting
-                  ? `Betting Opens at ${new Date(round.bettingOpensAt).toLocaleTimeString()}`
-                  : !playerState.isRegistered
-                  ? 'Register for Round to Submit'
-                  : !hasEditsRemaining
-                  ? 'Maximum Slip Submissions Reached'
-                  : 'Submit Bet Slip'}
+                  : submitDisabledReason ?? (submissionCount === 1 ? 'Submit Edited Slip' : 'Submit Bet Slip')}
               </button>
             )}
           </div>
