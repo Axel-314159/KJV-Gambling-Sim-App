@@ -2,7 +2,9 @@ import { PgBoss } from 'pg-boss';
 import { env } from '../config/env.js';
 import { pool, withTransaction } from '../db/pool.js';
 import { computeMaxVersesPerPlayer, getScheduleForInstant } from '../config/time.js';
-import { settleRound } from '../modules/settlement/engine.js';
+import { settleRound, autoRegisterEligiblePlayers } from '../modules/settlement/engine.js';
+
+const TOTAL_KJV_VERSES = 31102;
 
 export async function ensureActiveRoundExists() {
   await withTransaction(async (tx) => {
@@ -61,12 +63,65 @@ export async function processRoundLifecycleTick() {
      WHERE status = 'REGISTRATION_OPEN' AND betting_opens_at <= NOW()
      ORDER BY id ASC`
   );
+  
   for (const r of toOpen) {
-    const cap = computeMaxVersesPerPlayer(r.registered_count, r.min_segment_length);
-    await pool.query(
-      `UPDATE rounds SET status = 'BETTING_OPEN', max_verses_per_player = $1 WHERE id = $2`,
-      [cap, r.id]
-    );
+
+    await withTransaction(async (tx) => {
+      // Lock the round row so concurrent ticks or requests cannot double-transition
+      const { rows: roundRows } = await tx.query(
+        `SELECT
+          id,
+          status,
+          max_registered_players,
+          min_stake_per_verse,
+          min_segment_length,
+          min_segments
+        FROM rounds
+        WHERE id = $1
+          AND status = 'REGISTRATION_OPEN'
+          AND betting_opens_at <= NOW()
+        FOR UPDATE`,
+        [r.id]
+      );
+
+      if (!roundRows.length) return;
+      const round = roundRows[0];
+
+      // 1. Auto-register opted-in players at the close of registration
+      const autoRegisteredCount = await autoRegisterEligiblePlayers(tx, {
+        id: round.id,
+        maxRegisteredPlayers: round.max_registered_players,
+        minStakePerVerse: Number(round.min_stake_per_verse),
+        minSegmentLength: Number(round.min_segment_length),
+        minSegments: Number(round.min_segments),
+      });
+
+      // 2. Compute final registered player count (M) including manual + auto-registered
+      const { rows: finalCountRows } = await tx.query<{ count: number }>(
+        `SELECT COUNT(*)::int AS count
+        FROM round_registrations
+        WHERE round_id = $1`,
+        [round.id]
+      );
+      const totalRegisteredM = finalCountRows[0]?.count ?? 0;
+      
+      const cap = computeMaxVersesPerPlayer(totalRegisteredM, round.min_segment_length);
+      await tx.query(
+        `UPDATE rounds
+        SET status = 'BETTING_OPEN',
+            registered_count = $1,
+            max_verses_per_player = $2
+        WHERE id = $3`,
+        [totalRegisteredM, cap, round.id]
+      );
+
+      if (autoRegisteredCount > 0) {
+        console.info(
+          { roundId: round.id, autoRegisteredCount, totalRegisteredM, cap },
+          'Auto-registered opted-in players at betting phase start'
+        );
+      }
+    });
   }
 
   // 2. Settle BETTING_OPEN -> COMPLETED once betting_closes_at arrives

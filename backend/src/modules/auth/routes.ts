@@ -5,7 +5,7 @@ import { hash, verify } from '@node-rs/argon2';
 import nodemailer from 'nodemailer';
 import { pool, withTransaction } from '../../db/pool.js';
 import { env } from '../../config/env.js';
-import { hashToken, requireRole } from '../../plugins/auth.js';
+import { hashToken, requireActivePlayer, requireRole } from '../../plugins/auth.js';
 
 const mailer = env.SMTP_HOST
   ? nodemailer.createTransport({
@@ -77,6 +77,30 @@ export async function authRoutes(app: FastifyInstance) {
     }
     return req.currentUser;
   });
+  
+  app.patch(
+    '/api/auth/settings',
+    { preHandler: requireActivePlayer },
+    async (req) => {
+      const { autoRegister } = z
+        .object({
+          autoRegister: z.boolean(),
+        })
+        .parse(req.body);
+
+      const { rows } = await pool.query<{ auto_register: boolean }>(
+        `UPDATE users
+         SET auto_register = $1
+         WHERE id = $2
+         RETURNING auto_register`,
+        [autoRegister, req.currentUser!.id]
+      );
+
+      return {
+        autoRegister: Boolean(rows[0].auto_register),
+      };
+    }
+  );
 
   // 2. Player Signup (Enters PENDING_APPROVAL queue)
   app.post('/api/auth/signup', async (req, reply) => {

@@ -12,6 +12,7 @@ export interface AuthUser {
   maxBetOverride: number | null;
   walletBalance: number;
   createdAt: string;
+  autoRegister: boolean;
 }
 
 declare module 'fastify' {
@@ -34,7 +35,7 @@ export async function registerAuthHooks(app: FastifyInstance) {
     const sidHash = hashToken(rawSid);
     const { rows } = await pool.query(
       `SELECT u.id, u.username, u.email, u.role, u.status, u.suspended_until,
-              u.max_bet_override, u.wallet_balance, u.created_at
+              u.max_bet_override, u.wallet_balance, u.created_at, u.auto_register
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = $1 AND s.expires_at > NOW()`,
@@ -61,6 +62,7 @@ export async function registerAuthHooks(app: FastifyInstance) {
       maxBetOverride: u.max_bet_override,
       walletBalance: u.wallet_balance,
       createdAt: new Date(u.created_at).toISOString(),
+      autoRegister: u.auto_register
     };
   });
 }

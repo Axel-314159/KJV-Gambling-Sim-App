@@ -11,7 +11,9 @@ export interface UserProfile {
   suspendedUntil: string | null;
   walletBalance: number; // In Shekels
   createdAt: string;
+  autoRegister: boolean;
 }
+
 export interface ActiveRoundState {
   serverTimeUtc: string;
   jackpotBalance: number;

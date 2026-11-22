@@ -17,6 +17,65 @@ export interface RawBet {
 }
 
 /**
+ * Registers all eligible users with auto_register = TRUE for the given round,
+ * respecting max_registered_players if configured. Returns the number of newly
+ * auto-registered players.
+ */
+export async function autoRegisterEligiblePlayers(
+  tx: PoolClient,
+  round: {
+    id: number;
+    maxRegisteredPlayers: number | null;
+    minStakePerVerse: number;
+    minSegmentLength: number;
+    minSegments: number;
+  }
+): Promise<number> {
+  // 1. Check current registration count and remaining capacity
+  const { rows: countRows } = await tx.query<{ count: number }>(
+    `SELECT COUNT(*)::int AS count
+     FROM round_registrations
+     WHERE round_id = $1`,
+    [round.id]
+  );
+  const currentCount = countRows[0]?.count ?? 0;
+
+  let remainingSlots: number | null = null;
+  if (round.maxRegisteredPlayers !== null) {
+    remainingSlots = Math.max(0, round.maxRegisteredPlayers - currentCount);
+    if (remainingSlots === 0) {
+      return 0;
+    }
+  }
+
+  // Minimum Gerahs needed to submit the smallest legal slip in this round
+  const minRequiredBalance =
+    round.minStakePerVerse * round.minSegmentLength * round.minSegments;
+
+  // 2. Insert eligible active users who opted into auto_register
+  const { rowCount } = await tx.query(
+    `INSERT INTO round_registrations (round_id, user_id)
+     SELECT $1, u.id
+     FROM users u
+     WHERE u.auto_register = TRUE
+       AND u.status = 'ACTIVE'
+       AND (u.suspended_until IS NULL OR u.suspended_until <= NOW())
+       AND u.wallet_balance >= $2
+       AND NOT EXISTS (
+         SELECT 1
+         FROM round_registrations rr
+         WHERE rr.round_id = $1 AND rr.user_id = u.id
+       )
+     ORDER BY u.created_at ASC
+     LIMIT $3
+     ON CONFLICT (round_id, user_id) DO NOTHING`,
+    [round.id, minRequiredBalance, remainingSlots]
+  );
+
+  return rowCount ?? 0;
+}
+
+/**
  * Deducts the running jackpot (or a specific Gerah amount) from game_config,
  * records the negative debit in jackpot_ledger, and credits the winning user.
  */

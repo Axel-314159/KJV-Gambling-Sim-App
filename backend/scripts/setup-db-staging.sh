@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS users (
     approved_by      UUID REFERENCES users(id),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     initial_grant    BIGINT NOT NULL DEFAULT 2000 CHECK (initial_grant >= 0),
+    auto_register    BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- 3. Active HTTP Cookie Sessions
