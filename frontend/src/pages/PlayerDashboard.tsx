@@ -1,5 +1,5 @@
 // src/pages/PlayerDashboard.tsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, ApiError } from '../lib/api';
 import type { LedgerEntry, UserProfile } from '../types/api';
@@ -8,21 +8,14 @@ import { formatCurrency, formatSignedCurrency } from '../lib/currency';
 
 export function PlayerDashboard({ user }: { user: UserProfile }) {
   const queryClient = useQueryClient();
-  const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [statusMsg, _setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<'idle' | 'saved' | 'error'>('idle');
-  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [_settingsError, setSettingsError] = useState<string | null>(null);
 
   const { data: ledger } = useQuery<LedgerEntry[]>({
     queryKey: ['playerLedger'],
     queryFn: () => apiFetch<LedgerEntry[]>('/player/ledger'),
   });
-
-  const { data: settings } = useQuery<UserProfile>({
-    queryKey: ['playerSettings'],
-    queryFn: () => apiFetch<UserProfile>('/player/settings'),
-  });
-
-  // setAutoRegister(settings?.autoRegister === true ? true : false);
 
   const updateSettingsMutation = useMutation({
     mutationFn: (autoRegister: boolean) =>
