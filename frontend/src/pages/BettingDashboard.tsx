@@ -448,6 +448,7 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
                 {draftSegments.map((seg, idx) => {
                   const minSegGerahs = seg.verseLength * round.minStakePerVerse;
                   const minSegShekels = Math.max(1, Math.ceil(minSegGerahs / GERAHS_PER_SHEKEL));
+                  const currentShekels = Math.floor((Number(seg.stake) || 0) / GERAHS_PER_SHEKEL);
                   const isSegStakeTooLow = (Number(seg.stake) || 0) < toGerahs(minSegShekels, 0);
 
                   return (
@@ -469,14 +470,24 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          min={0}
+                          min={minSegShekels}
                           step={1}
                           disabled={!canEditDraft}
-                          value={Math.floor((Number(seg.stake) || 0) / GERAHS_PER_SHEKEL)}
+                          placeholder={String(minSegShekels)}
+                          value={currentShekels === 0 ? '' : currentShekels}
                           onChange={(e) => {
-                            const wholeShekels = Math.max(1, Math.floor(Number(e.target.value) || 0));
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              setDraftSegments(
+                                draftSegments.map((s, i) => (i === idx ? { ...s, stake: 0 } : s))
+                              );
+                              return;
+                            }
+                            const wholeShekels = Math.max(0, Math.floor(Number(raw) || 0));
                             setDraftSegments(
-                              draftSegments.map((s, i) => (i === idx ? { ...s, stake: toGerahs(wholeShekels, 0) } : s))
+                              draftSegments.map((s, i) =>
+                                i === idx ? { ...s, stake: toGerahs(wholeShekels, 0) } : s
+                              )
                             );
                           }}
                           className="w-24 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-right font-mono text-sm"
