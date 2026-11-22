@@ -114,4 +114,29 @@ export async function statsRoutes(app: FastifyInstance) {
       mostContestedBooks,
     };
   });
+
+  app.get('/api/stats/ledger', { preHandler: requireActivePlayer }, async (req) => {
+    const { rows } = await pool.query(
+      `SELECT created_at, MAX(balance_after) AS balance
+       FROM wallet_ledger
+       WHERE user_id = $1 AND entry_type = ANY(ARRAY['ROUND_WINNING', 'INITIAL_GRANT'])
+       GROUP BY created_at
+       ORDER BY created_at ASC NULLS LAST`,
+       [req.currentUser!.id]
+    );
+
+    const dateTimeFormat = new Intl.DateTimeFormat("sv-SE", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    });
+
+    const retval = rows.map((row) => ({
+      date: dateTimeFormat.format(row.created_at),
+      walletBalance: row.balance
+    }));
+
+    return { ledgerData: retval };
+  });
+
 }
