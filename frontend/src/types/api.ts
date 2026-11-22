@@ -119,7 +119,7 @@ export interface WeeklyStatsResponse {
   weekStartDate: string;
   weekEndDate: string;
   totalRoundsSettled: number;
-  totalShekelsWagered: number;
+  totalGerahsWagered: number;
   mostContestedBooks: { bookName: string; collisionCount: number }[];
   topWinners: { username: string; netGerahsWon: number; survivingSegments: number }[];
 }

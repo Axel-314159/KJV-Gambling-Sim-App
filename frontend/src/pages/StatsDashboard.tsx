@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 import type { WeeklyStatsResponse } from '../types/api';
-import { formatSignedCurrency } from '../lib/currency';
+import { formatCurrency, formatSignedCurrency } from '../lib/currency';
 
 export function StatsDashboard() {
   const { data: stats } = useQuery<WeeklyStatsResponse>({
@@ -17,7 +17,7 @@ export function StatsDashboard() {
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <h1 className="text-xl font-bold text-amber-400">Weekly Arena Report</h1>
         <p className="text-sm text-slate-400">
-          Period: {stats.weekStartDate} to {stats.weekEndDate} • Total Wagered: {stats.totalShekelsWagered.toLocaleString()} Shekels
+          Period: {stats.weekStartDate} to {stats.weekEndDate} • Total Wagered: {formatCurrency(stats.totalGerahsWagered)} Shekels
         </p>
       </div>
 

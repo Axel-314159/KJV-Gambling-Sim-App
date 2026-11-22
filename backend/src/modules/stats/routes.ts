@@ -79,7 +79,7 @@ export async function statsRoutes(app: FastifyInstance) {
   app.get('/api/stats/weekly', { preHandler: requireActivePlayer }, async () => {
     const { rows: summary } = await pool.query(
       `SELECT COUNT(*)::int AS "totalRoundsSettled",
-              COALESCE(SUM(total_pot), 0) AS "totalShekelsWagered",
+              COALESCE(SUM(total_pot), 0) AS "totalGerahsWagered",
               COALESCE(MIN(round_date)::text, CURRENT_DATE::text) AS "weekStartDate",
               COALESCE(MAX(round_date)::text, CURRENT_DATE::text) AS "weekEndDate"
        FROM rounds
