@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Sparkles, ChevronLeft, ChevronRight, ChevronDown, X, AlertCircle } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, ChevronDown, X, AlertCircle, BookOpenText } from 'lucide-react';
 import { apiFetch } from '../lib/api';
-import type { AutoSelectRequest, KjvBookMeta, KjvVerse } from '../types/api';
+import type { AutoSelectRequest, KjvBookMeta, KjvVerse, ActiveRoundState } from '../types/api';
 
 interface KjvExplorerProps {
   isSlipLocked: boolean;
@@ -15,6 +15,14 @@ interface KjvExplorerProps {
   onAutoSelect: (req: AutoSelectRequest) => void;
   isAutoSelecting: boolean;
 }
+
+interface KjvExplorerMiniProps {
+  startBook: number;
+  endBook: number;
+  onStartBookChange: (bookNumber: number) => void;
+  onEndBookChange: (bookNumber: number) => void;
+}
+
 
 export function KjvExplorer({
   isSlipLocked,
@@ -82,6 +90,13 @@ export function KjvExplorer({
     enabled: isSearching,
   });
 
+  const { data: state } = useQuery<ActiveRoundState>({
+    queryKey: ['roundState'],
+    queryFn: () => apiFetch<ActiveRoundState>(`/rounds/current`),
+    refetchInterval: 15_000,
+  });
+  
+
   const displayedVerses = isSearching ? searchResults : chapterVerses;
   const isLoadingVerses = isSearching ? isLoadingSearch : isLoadingChapter;
 
@@ -100,6 +115,16 @@ export function KjvExplorer({
     stagedLength !== null &&
     stagedLength >= minSegmentLength &&
     stagedLength <= maxSegmentLength;
+
+  const isBookIncluded = (bookNum: number) => {
+    if (state?.round.startBook && state?.round.endBook) {
+      const lower = Math.min(state?.round.startBook, state?.round.endBook);
+      const upper = Math.max(state?.round.startBook, state?.round.endBook);
+      return (bookNum <= upper && bookNum >= lower);
+    } else {
+      return true;
+    }
+  };
 
   const handleBookChange = (newBookNum: number) => {
     setSelectedBookNumber(newBookNum);
@@ -160,7 +185,7 @@ export function KjvExplorer({
           disabled={isSlipLocked}
           className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition"
         >
-          <Sparkles className="w-4 h-4" />
+          <BookOpenText className="w-4 h-4" />
           Auto-Select Segments
         </button>
       </div>
@@ -219,11 +244,13 @@ export function KjvExplorer({
                           <button
                             key={b.bookNumber}
                             type="button"
+                            disabled={!isBookIncluded(b.bookNumber)}
                             onClick={() => handleBookChange(b.bookNumber)}
-                            className={`w-full text-left px-2.5 py-1.5 rounded text-sm transition ${
-                              b.bookNumber === selectedBookNumber
+                            className={
+                              `w-full text-left px-2.5 py-1.5 rounded text-sm transition disabled:bg-slate-800 disabled:text-slate-500 
+                              ${ b.bookNumber === selectedBookNumber
                                 ? 'bg-amber-500 text-slate-950 font-semibold'
-                                : 'text-slate-200 hover:bg-slate-800'
+                                : 'text-slate-200 hover:bg-slate-800' 
                             }`}
                           >
                             {b.bookName}
@@ -241,9 +268,11 @@ export function KjvExplorer({
                           <button
                             key={b.bookNumber}
                             type="button"
+                            disabled={!isBookIncluded(b.bookNumber)}
                             onClick={() => handleBookChange(b.bookNumber)}
-                            className={`w-full text-left px-2.5 py-1.5 rounded text-sm transition ${
-                              b.bookNumber === selectedBookNumber
+                            className={
+                              `w-full text-left px-2.5 py-1.5 rounded text-sm transition disabled:bg-slate-800 disabled:text-slate-500
+                              ${ b.bookNumber === selectedBookNumber
                                 ? 'bg-amber-500 text-slate-950 font-semibold'
                                 : 'text-slate-200 hover:bg-slate-800'
                             }`}
@@ -499,6 +528,251 @@ export function KjvExplorer({
     </div>
   );
 }
+
+
+export function KjvExplorerMini({
+  startBook,
+  endBook,
+  onStartBookChange,
+  onEndBookChange,
+}: KjvExplorerMiniProps) {
+  const [_searchQuery, setSearchQuery] = useState<string>('');
+
+  // Custom dropdown state
+  const [openStartBookMenu, setStartBookOpenMenu] = useState<'BOOK' | null>(null);
+  const [openEndBookMenu, setEndBookOpenMenu] = useState<'BOOK' | null>(null);
+  const [bookFilter, setBookFilter] = useState<string>('');
+  const dropdownContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownContainerRef.current && !dropdownContainerRef.current.contains(e.target as Node)) {
+        setStartBookOpenMenu(null);
+        setEndBookOpenMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const {
+    data: books,
+    isLoading: isLoadingBooks,
+    isError: _isBooksError,
+    error: _booksError,
+  } = useQuery<KjvBookMeta[]>({
+    queryKey: ['kjvBooks'],
+    queryFn: () => apiFetch<KjvBookMeta[]>('/kjv/books'),
+    staleTime: Infinity,
+  });
+
+  const currentStartBook = books?.find((b) => b.bookNumber === startBook);
+  const currentEndBook = books?.find((b) => b.bookNumber === endBook);
+  // const isSearching = searchQuery.trim().length >= 3;
+
+  const handleStartBookChange = (newBookNum: number) => {
+    onStartBookChange(newBookNum);
+    setSearchQuery('');
+    setBookFilter('');
+    setStartBookOpenMenu(null);
+  };
+
+  const handleEndBookChange = (newBookNum: number) => {
+    onEndBookChange(newBookNum);
+    setSearchQuery('');
+    setBookFilter('');
+    setEndBookOpenMenu(null);
+  };
+
+
+  const filteredBooks = (books ?? []).filter((b) =>
+    b.bookName.toLowerCase().includes(bookFilter.trim().toLowerCase())
+  );
+  const otBooks = filteredBooks.filter((b) => b.testament === 'OLD');
+  const ntBooks = filteredBooks.filter((b) => b.testament === 'NEW');
+
+
+  return (
+    
+    <div className="bg-slate-900  rounded-xl p-4 space-y-4">
+      <h3 className="font-semibold text-lg">Select Book Range</h3>
+
+      {/* Book & Chapter Dropdown Bar */}
+      <div ref={dropdownContainerRef} className="grid grid-cols-2 sm:grid-cols-12 gap-2.5">
+
+        {/* Start Book selection */}
+        <div className="sm:col-span-6 relative">
+          <label className="block text-xs text-slate-400 mb-1">Start Book</label>
+          <button
+            type="button"
+            onClick={() => setStartBookOpenMenu((m) => (m === 'BOOK' ? null : 'BOOK'))}
+            className="w-full bg-slate-950 border border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between text-slate-100"
+          >
+            <span className="truncate">
+              {isLoadingBooks ? 'Loading books...' : currentStartBook?.bookName ?? 'Genesis'}
+            </span>
+            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+          </button>
+
+          {openStartBookMenu === 'BOOK' && (
+            <div className="absolute z-30 mt-1 w-full min-w-[260px] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden">
+              <div className="p-2 border-b border-slate-800 bg-slate-950">
+                <input
+                  type="text"
+                  autoFocus
+                  value={bookFilter}
+                  onChange={(e) => setBookFilter(e.target.value)}
+                  placeholder="Filter books..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="max-h-72 overflow-y-auto p-1.5 space-y-2 text-sm">
+                {!books?.length ? (
+                  <div className="p-3 text-xs text-slate-400 text-center">
+                    No books loaded. Ensure `npm run seed:kjv` has run.
+                  </div>
+                ) : (
+                  <>
+                    {otBooks.length > 0 && (
+                      <div>
+                        <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          Old Testament
+                        </div>
+                        {otBooks.map((b) => (
+                          <button
+                            key={b.bookNumber}
+                            type="button"
+                            onClick={() => handleStartBookChange(b.bookNumber)}
+                            className={`w-full text-left px-2.5 py-1.5 rounded text-sm transition ${
+                              b.bookNumber === startBook
+                                ? 'bg-amber-500 text-slate-950 font-semibold'
+                                : 'text-slate-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            {b.bookName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {ntBooks.length > 0 && (
+                      <div>
+                        <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          New Testament
+                        </div>
+                        {ntBooks.map((b) => (
+                          <button
+                            key={b.bookNumber}
+                            type="button"
+                            onClick={() => handleStartBookChange(b.bookNumber)}
+                            className={`w-full text-left px-2.5 py-1.5 rounded text-sm transition ${
+                              b.bookNumber === startBook
+                                ? 'bg-amber-500 text-slate-950 font-semibold'
+                                : 'text-slate-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            {b.bookName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* End Book selection */}
+        <div className="sm:col-span-6 relative">
+          <label className="block text-xs text-slate-400 mb-1">End Book</label>
+          <button
+            type="button"
+            onClick={() => setEndBookOpenMenu((m) => (m === 'BOOK' ? null : 'BOOK'))}
+            className="w-full bg-slate-950 border border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between text-slate-100"
+          >
+            <span className="truncate">
+              {isLoadingBooks ? 'Loading books...' : currentEndBook?.bookName ?? 'Genesis'}
+            </span>
+            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+          </button>
+
+          {openEndBookMenu === 'BOOK' && (
+            <div className="absolute z-30 mt-1 w-full min-w-[260px] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden">
+              <div className="p-2 border-b border-slate-800 bg-slate-950">
+                <input
+                  type="text"
+                  autoFocus
+                  value={bookFilter}
+                  onChange={(e) => setBookFilter(e.target.value)}
+                  placeholder="Filter books..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="max-h-72 overflow-y-auto p-1.5 space-y-2 text-sm">
+                {!books?.length ? (
+                  <div className="p-3 text-xs text-slate-400 text-center">
+                    No books loaded. Ensure `npm run seed:kjv` has run.
+                  </div>
+                ) : (
+                  <>
+                    {otBooks.length > 0 && (
+                      <div>
+                        <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          Old Testament
+                        </div>
+                        {otBooks.map((b) => (
+                          <button
+                            key={b.bookNumber}
+                            type="button"
+                            onClick={() => handleEndBookChange(b.bookNumber)}
+                            className={`w-full text-left px-2.5 py-1.5 rounded text-sm transition ${
+                              b.bookNumber === endBook
+                                ? 'bg-amber-500 text-slate-950 font-semibold'
+                                : 'text-slate-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            {b.bookName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {ntBooks.length > 0 && (
+                      <div>
+                        <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          New Testament
+                        </div>
+                        {ntBooks.map((b) => (
+                          <button
+                            key={b.bookNumber}
+                            type="button"
+                            onClick={() => handleEndBookChange(b.bookNumber)}
+                            className={`w-full text-left px-2.5 py-1.5 rounded text-sm transition ${
+                              b.bookNumber === endBook
+                                ? 'bg-amber-500 text-slate-950 font-semibold'
+                                : 'text-slate-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            {b.bookName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+    
+  );
+}
+
 
 function AutoSelectInlineForm({
   maxVerses,
