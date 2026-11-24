@@ -97,7 +97,7 @@ export function LandingPage({ user }: { user: UserProfile | null }) {
           {/* === PASTE YOUR RULES & LIMITS HERE === */}
           <div className="text-sm text-slate-300 space-y-2.5 leading-relaxed">
             <p>
-              Approved accounts begin with a starting grant of <strong className="text-amber-300">~100 Shekels</strong>. Each round sets minimum and maximum limits on segment length, number of discrete segments per slip, and minimum Shekels staked per verse.
+              Approved accounts begin with a starting grant of <strong className="text-amber-300">~500 Shekels</strong>. Each round sets minimum and maximum limits on segment length, number of discrete segments per slip, and minimum Shekels staked per verse.
             </p>
             <p>
               Your total combined verse budget adapts dynamically based on the number of players registered for the round, and your own segments within a slip may never overlap one another.
@@ -114,10 +114,13 @@ export function LandingPage({ user }: { user: UserProfile | null }) {
           {/* === PASTE YOUR PAYOUT EXPLANATION HERE === */}
           <div className="text-sm text-slate-300 space-y-2.5 leading-relaxed">
             <p>
-              Every segment that finishes the round with zero collisions survives and splits the round&apos;s total pot proportionally to the product of its wagered stake and verse length.
+              Every segment that finishes the round with zero collisions survives and splits the round&apos;s total pot proportionally to the product of its wagered stake, verse length, and re-use score.
             </p>
             <p>
               If every segment in a round collides and no winners remain, all players have their wagers refunded in full.
+            </p>
+            <p>
+              <strong className="text-amber-300">Verse Re-Use Score:</strong> Betting on the same verses across multiple rounds increases your weighted share if you win with those verses. 
             </p>
             <p>
               <strong className="text-amber-300">Jackpot Verses:</strong> A secret segment of verse is chosen at random. If one of your winning segments completely contains the jackpot verses, you win the running jackpot!

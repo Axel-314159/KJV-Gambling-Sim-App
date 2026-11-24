@@ -2,6 +2,15 @@ import { FastifyInstance } from 'fastify';
 import { pool } from '../../db/pool.js';
 import { requireActivePlayer } from '../../plugins/auth.js';
 
+
+interface UserVerseData {
+  bookName: string,
+  chapter: number,
+  verseId: number, 
+  score: number
+}
+
+
 function formatVerseRange(row: {
   start_book: string | null;
   start_chapter: number | null;
@@ -137,6 +146,97 @@ export async function statsRoutes(app: FastifyInstance) {
     }));
 
     return { ledgerData: retval };
+  });
+
+
+  app.get('/api/stats/scores', { preHandler: requireActivePlayer }, async (req) => {
+    
+    const { rows: playerBetsWonRows } = await pool.query(
+      `SELECT id, round_id, start_verse_id, end_verse_id
+       FROM bets
+       WHERE user_id = $1 AND outcome = 'WON'
+       ORDER BY start_verse_id ASC, end_verse_id DESC`,
+      [req.currentUser!.id]
+    );
+
+    const verseIds = playerBetsWonRows.flatMap((c) => [c.start_verse_id, c.end_verse_id]);
+
+    const { rows: labelRows } = await pool.query(
+      `SELECT verse_id, book_name || ' ' || chapter || ':' || verse AS label
+        FROM kjv_verses WHERE verse_id = ANY($1)`,
+      [verseIds]
+    );
+    
+    const labelMap = new Map(labelRows.map((r) => [r.verse_id, r.label]));
+
+    let nonzeroScores: {
+      label: string,
+      verseId: number, 
+      score: number 
+    }[] = [];
+
+    for (const bet of playerBetsWonRows) {
+      for (let i = bet.start_verse_id; i < bet.end_verse_id; i++ ) {
+        const matching = nonzeroScores.find((item) => item.verseId === i );
+        if (matching) {
+          // increment the score for this verse
+          nonzeroScores[nonzeroScores.findIndex((datum) => datum.verseId === i)].score += 1;
+        } else {
+          // start the verse with a score of 1
+          nonzeroScores.push({ label: labelMap.get(i), verseId: i, score: 1 });
+        }
+      }
+    }
+
+    let nonzeroScoreSegments: {
+      startVerseId: number,
+      endVerseId: number,
+      startLabel?: string, // e.g., "Genesis 1:1"
+      endLabel?: string,   // e.g., "Genesis 1:5"
+      score: number
+    }[] = [];
+
+    const bigScores = nonzeroScores.filter((score) => score.score > 1);
+    bigScores.sort((a, b) => a.verseId - b.verseId);
+
+    let segmentStart = bigScores[0].verseId;
+    let segmentEnd = segmentStart;
+
+    for (const verse of bigScores) {
+      if (verse.verseId > segmentEnd + 1) {
+        const segment = bigScores.filter((v) => v.verseId >= segmentStart && v.verseId < segmentEnd );
+        const segmentScore = segment.reduce((acc, v) => acc + v.score, 0) / segment.length;
+
+        nonzeroScoreSegments.push({
+          startVerseId: segmentStart, 
+          endVerseId: segmentEnd, 
+          startLabel: labelMap.get(segmentStart), 
+          endLabel: labelMap.get(segmentEnd),
+          score: segmentScore
+        });
+
+        segmentStart = verse.verseId;
+        segmentEnd = verse.verseId + 1;
+      } 
+      else {
+        segmentEnd += 1;
+      }
+    }
+
+    const segment = bigScores.filter((v) => v.verseId >= segmentStart && v.verseId < segmentEnd );
+    const segmentScore = segment.reduce((acc, v) => acc + v.score, 0) / segment.length;
+
+    nonzeroScoreSegments.push({
+      startVerseId: segmentStart, 
+      endVerseId: segmentEnd, 
+      startLabel: labelMap.get(segmentStart), 
+      endLabel: labelMap.get(segmentEnd),
+      score: segmentScore
+    });
+
+    nonzeroScoreSegments.sort((a, b) => b.score - a.score);
+
+    return nonzeroScoreSegments;
   });
 
 }

@@ -24,8 +24,13 @@ export function IndexLineChart() {
 
   return (
     <LineChart style={{ width: '100%', aspectRatio: 2.5, maxWidth: 1000, margin: 'auto' }} responsive data={ledgerData}>
-      <CartesianGrid strokeDasharray="4 4" />
-      <XAxis dataKey="date" label="Date"/>
+      <CartesianGrid strokeDasharray="1 5" />
+      <XAxis dataKey="date" label={{
+          value: "Date",
+          position: 'insideBottom',
+          dy: 10,
+          style: { textAnchor: 'middle' }
+        }}/>
       <YAxis 
         width="auto" 
         label={{

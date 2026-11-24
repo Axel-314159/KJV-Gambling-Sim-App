@@ -142,3 +142,18 @@ export interface KjvBookMeta {
 export interface PlayerDataResponse {
   ledgerData: { date: string; walletBalance: number }[];
 }
+
+export interface VerseReuseScore {
+  bookName: string;
+  chapter: number;
+  verseId: number;
+  score: number;
+}
+
+export interface SegmentReuseScore {
+  startVerseId: number;
+  endVerseId: number;
+  startLabel?: string; // e.g., "Genesis 1:1"
+  endLabel?: string;   // e.g., "Genesis 1:5"
+  score: number;
+}

@@ -103,6 +103,7 @@ export function KjvExplorer({
   useEffect(() => {
     if (state && !hasHydratedRoundState.current ) {
       setSelectedBookNumber(state.round.startBook ?? 1);
+      hasHydratedRoundState.current = true;
     }
   }, [state]);
 

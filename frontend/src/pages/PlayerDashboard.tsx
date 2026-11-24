@@ -5,7 +5,9 @@ import { apiFetch, ApiError } from '../lib/api';
 import type { LedgerEntry, UserProfile } from '../types/api';
 import { formatCurrency, formatSignedCurrency } from '../lib/currency';
 import { IndexLineChart } from '../components/GameStats';
+import type { SegmentReuseScore } from '../types/api';
 // import { CheckCircle2, AlertTriangle } from 'lucide-react';
+
 
 export function PlayerDashboard({ user }: { user: UserProfile }) {
   const queryClient = useQueryClient();
@@ -16,6 +18,11 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
   const { data: ledger } = useQuery<LedgerEntry[]>({
     queryKey: ['playerLedger'],
     queryFn: () => apiFetch<LedgerEntry[]>('/player/ledger'),
+  });
+
+  const { data: playerSegmentScores } = useQuery<SegmentReuseScore[]>({
+    queryKey: ['playerVerseScores'],
+    queryFn: () => apiFetch<SegmentReuseScore[]>('/stats/scores'),
   });
 
   const updateSettingsMutation = useMutation({
@@ -47,51 +54,74 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
           <p className="text-sm text-slate-400">{user.email} • Role: {user.role}</p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="text-xs uppercase tracking-wider text-slate-400">Available Wallet Balance</div>
-            <div className="text-2xl font-mono font-bold text-amber-300 mt-1">
-              {formatCurrency(user.walletBalance)}
+        {/* Settings pane */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h1 className="text-xl font-bold">Player Settings</h1>
+          <form
+          className="space-y-4 text-sm"
+          >
+            <input type="checkbox" id="auto_reg_chkbox" name="auto_reg_chkbox"
+              onChange={(e) => {
+                e.preventDefault();
+                setSettingsStatus('idle');
+                updateSettingsMutation.mutate(e.target.checked);
+              }}
+              checked={Boolean(user.autoRegister)}></input>
+            <label className="text-sm text-slate-400">&nbsp;&nbsp;Auto-Register For Next Round&nbsp;&nbsp;&nbsp;&nbsp;</label>
+          </form>
+          
+          <br />
+          {statusMsg && (
+            <div
+              className={`px-4 py-3 rounded-lg text-sm flex items-center gap-2 border ${
+                statusMsg.type === 'ok'
+                  ? 'bg-emerald-950/50 border-emerald-800 text-emerald-200'
+                  : 'bg-rose-950/50 border-rose-800 text-rose-200'
+              }`}
+            >
+              {updateSettingsMutation.isPending && (
+                <span className="text-xs text-slate-400">Saving...</span>
+              )}
+              {!updateSettingsMutation.isPending && settingsStatus === 'saved' && (
+                <span className="text-xs text-emerald-400">Saved</span>
+              )}
             </div>
-          </div>
+          )}
         </div>
 
       </div>
 
 
-      {/* Settings pane */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-        <h1 className="text-xl font-bold">Player Settings</h1>
-        <form
-        className="space-y-4 text-sm"
-        >
-          <input type="checkbox" id="auto_reg_chkbox" name="auto_reg_chkbox"
-            onChange={(e) => {
-              e.preventDefault();
-              setSettingsStatus('idle');
-              updateSettingsMutation.mutate(e.target.checked);
-            }}
-            checked={Boolean(user.autoRegister)}></input>
-          <label className="text-sm text-slate-400">&nbsp;&nbsp;Auto-Register For Next Round&nbsp;&nbsp;&nbsp;&nbsp;</label>
-        </form>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        <br />
-        {statusMsg && (
-        <div
-          className={`px-4 py-3 rounded-lg text-sm flex items-center gap-2 border ${
-            statusMsg.type === 'ok'
-              ? 'bg-emerald-950/50 border-emerald-800 text-emerald-200'
-              : 'bg-rose-950/50 border-rose-800 text-rose-200'
-          }`}
-        >
-          {updateSettingsMutation.isPending && (
-            <span className="text-xs text-slate-400">Saving...</span>
-          )}
-          {!updateSettingsMutation.isPending && settingsStatus === 'saved' && (
-            <span className="text-xs text-emerald-400">Saved</span>
-          )}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h2 className="font-semibold text-lg mb-3">Wallet Balance History</h2>
+          <IndexLineChart />
         </div>
-      )}
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h2 className="font-semibold text-lg mb-3">Your Most-Reused Segments</h2>
+          <table className="w-full text-sm text-left">
+            <thead>
+              <tr className="border-b border-slate-800 text-xs uppercase text-slate-400">
+                <th className="py-2.5 px-3 text-left">Verse Range</th>
+                <th className="py-2.5 px-3 text-left">Re-Use Score</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 text-sm">
+              {playerSegmentScores?.map((entry) => (
+                <tr key={entry.startVerseId} className="hover:bg-slate-800/30">
+                  <td className="py-2.5 px-3 font-medium text-slate-200">
+                    {entry.startLabel} - {entry.endLabel}
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-400">
+                    {entry.score}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Ledger */}
