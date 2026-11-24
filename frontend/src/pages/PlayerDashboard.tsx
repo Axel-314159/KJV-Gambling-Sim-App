@@ -20,10 +20,12 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
     queryFn: () => apiFetch<LedgerEntry[]>('/player/ledger'),
   });
 
-  const { data: playerSegmentScores } = useQuery<SegmentReuseScore[]>({
+  const { data: playerSegmentScoresAll } = useQuery<SegmentReuseScore[]>({
     queryKey: ['playerVerseScores'],
     queryFn: () => apiFetch<SegmentReuseScore[]>('/stats/scores'),
   });
+
+  const playerSegmentScores = playerSegmentScoresAll?.slice(0, 10);
 
   const updateSettingsMutation = useMutation({
     mutationFn: (autoRegister: boolean) =>
@@ -171,11 +173,6 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
             ))}
           </tbody>
         </table>
-      </div>
-      
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-        <h2 className="font-semibold text-lg mb-3">Wallet Balance History</h2>
-        <IndexLineChart />
       </div>
 
     </div>
