@@ -3,14 +3,253 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Unlock, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { apiFetch, ApiError } from '../lib/api';
 import type { AdminGameConfigResponse, UserProfile, AdminJackpotConfigResponse } from '../types/api';
-import { splitGerahs, toGerahs } from '../lib/currency';
+import { formatCurrency, splitGerahs, toGerahs } from '../lib/currency';
 import { KjvExplorerMini } from '../components/KjvExplorer';
+
+
+interface UserSearchResult {
+  id: string;
+  username: string;
+  email: string;
+  status: string;
+  walletBalance: number;
+}
+
 
 function toLocalDatetimeInput(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * 
+ * @returns react html
+ */
+function WalletGrantSection() {
+  const queryClient = useQueryClient();
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState<Record<string, string>>({});
+  const [shekelsInput, setShekelsInput] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
+    null
+  );
+
+  // Debounce search keystrokes by 250ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchInput.trim());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const { data: matchingUsers = [], isFetching } = useQuery<UserSearchResult[]>({
+    queryKey: ['adminUserSearch', debouncedQuery],
+    queryFn: () =>
+      apiFetch<UserSearchResult[]>(
+        `/admin/users/search?q=${encodeURIComponent(debouncedQuery)}`
+      ),
+    enabled: debouncedQuery.length > 0,
+  });
+
+  const selectedIds = Object.keys(selectedUsers);
+  const wholeShekels = shekelsInput === '' ? 0 : Number(shekelsInput);
+
+  const grantMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{ message: string }>('/admin/users/grant-shekels', {
+        method: 'POST',
+        body: JSON.stringify({
+          userIds: selectedIds,
+          amountGerahs: toGerahs(wholeShekels, 0),
+        }),
+      }),
+    onSuccess: (res) => {
+      setFeedback({ type: 'success', message: res.message });
+      setSelectedUsers({});
+      setShekelsInput('');
+      queryClient.invalidateQueries({ queryKey: ['adminUserSearch'] });
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+    },
+    onError: (err: ApiError) => {
+      setFeedback({ type: 'error', message: err.message });
+    },
+  });
+
+  const toggleUser = (user: UserSearchResult) => {
+    setSelectedUsers((prev) => {
+      const next = { ...prev };
+      if (next[user.id]) {
+        delete next[user.id];
+      } else {
+        next[user.id] = user.username;
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h2 className="font-semibold text-slate-100">Grant Shekels to Players</h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Search by username, check the players to credit, and enter the Shekel amount.
+          </p>
+        </div>
+        {selectedIds.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setSelectedUsers({})}
+            className="text-xs text-slate-400 hover:text-slate-200 underline"
+          >
+            Clear selection ({selectedIds.length})
+          </button>
+        )}
+      </div>
+
+      {feedback && (
+        <div
+          className={`px-3 py-2 rounded-lg text-xs border ${
+            feedback.type === 'success'
+              ? 'bg-emerald-950/50 border-emerald-800 text-emerald-200'
+              : 'bg-rose-950/60 border-rose-800 text-rose-200'
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      {/* 1. Username Search Input */}
+      <div>
+        <label htmlFor="admin-user-search" className="block text-xs text-slate-400 mb-1">
+          Search Username
+        </label>
+        <input
+          id="admin-user-search"
+          type="text"
+          placeholder="Type a username..."
+          value={searchInput}
+          onChange={(e) => {
+            setSearchInput(e.target.value);
+            if (feedback) setFeedback(null);
+          }}
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100"
+        />
+      </div>
+
+      {/* 2. Matching Usernames with Checkboxes */}
+      {debouncedQuery.length > 0 && (
+        <div className="bg-slate-950 border border-slate-800 rounded-lg max-h-60 overflow-y-auto divide-y divide-slate-800">
+          {isFetching ? (
+            <div className="p-3 text-xs text-slate-400">Searching...</div>
+          ) : matchingUsers.length === 0 ? (
+            <div className="p-3 text-xs text-slate-500">
+              No players found matching &ldquo;{debouncedQuery}&rdquo;.
+            </div>
+          ) : (
+            matchingUsers.map((u) => {
+              const isChecked = Boolean(selectedUsers[u.id]);
+              return (
+                <label
+                  key={u.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-slate-900/80 cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleUser(u)}
+                      className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500 focus:ring-offset-slate-950"
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-slate-200">{u.username}</div>
+                      <div className="text-xs text-slate-500">{u.email}</div>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-xs font-mono text-amber-300">
+                      {formatCurrency(u.walletBalance)}
+                    </div>
+                    <div className="text-[11px] text-slate-500">{u.status}</div>
+                  </div>
+                </label>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Selected Player Summary Chips */}
+      {selectedIds.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {Object.entries(selectedUsers).map(([id, uname]) => (
+            <span
+              key={id}
+              className="inline-flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs px-2.5 py-1 rounded-full"
+            >
+              {uname}
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedUsers((prev) => {
+                    const next = { ...prev };
+                    delete next[id];
+                    return next;
+                  })
+                }
+                className="hover:text-white font-bold"
+                aria-label={`Remove ${uname}`}
+              >
+                &times;
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 3. Numeric Entry & Grant Button */}
+      <div className="flex flex-wrap items-end gap-3 pt-1">
+        <div className="flex-1 min-w-[160px]">
+          <label htmlFor="grant-shekels-input" className="block text-xs text-slate-400 mb-1">
+            Shekels to Grant (per selected player)
+          </label>
+          <div className="relative">
+            <input
+              id="grant-shekels-input"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="0"
+              value={shekelsInput}
+              onChange={(e) => {
+                setShekelsInput(e.target.value.replace(/\D/g, ''));
+                if (feedback) setFeedback(null);
+              }}
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 pr-16 text-right font-mono text-sm text-amber-300"
+            />
+            <span className="text-xs text-slate-500 absolute right-3 top-2.5">Shekels</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => grantMutation.mutate()}
+          disabled={selectedIds.length === 0 || wholeShekels <= 0 || grantMutation.isPending}
+          className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-sm px-4 py-2 rounded-lg transition"
+        >
+          {grantMutation.isPending
+            ? 'Granting...'
+            : `Grant ${wholeShekels > 0 ? wholeShekels.toLocaleString() : ''} Shekels${
+                selectedIds.length > 0 ? ` (${selectedIds.length})` : ''
+              }`}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function AdminConsole({ currentUser }: { currentUser: UserProfile }) {
@@ -106,6 +345,8 @@ export function AdminConsole({ currentUser }: { currentUser: UserProfile }) {
         )}
       </div>
 
+      {currentUser.role === 'ADMIN' && <WalletGrantSection />}
+      
       {currentUser.role === 'ADMIN' && <JackpotConfigEditor />}
     </div>
   );

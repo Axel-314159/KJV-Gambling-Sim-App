@@ -321,4 +321,92 @@ export async function adminRoutes(app: FastifyInstance) {
       throw err;
     }
   });
+
+  // 1. Search players by username
+  app.get('/api/admin/users/search', { preHandler: requireRole(['ADMIN']) }, async (req) => {
+      const { q } = z.object({ q: z.string().trim().min(1).max(40),}).parse(req.query);
+
+      const escaped = q.replace(/[\\%_]/g, '\\$&');
+
+      const { rows } = await pool.query<{
+        id: string;
+        username: string;
+        email: string;
+        status: string;
+        wallet_balance: string;
+      }>(
+        `SELECT id, username, email, status, wallet_balance
+         FROM users
+         WHERE username ILIKE $1 ESCAPE '\\'
+         ORDER BY username ASC
+         LIMIT 25`,
+        [`%${escaped}%`]
+      );
+
+      return rows.map((u) => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        status: u.status,
+        walletBalance: Number(u.wallet_balance),
+      }));
+    }
+  );
+
+  // 2. Grant Shekels (converted to Gerahs) to one or more selected players
+  app.post('/api/admin/users/grant-shekels', { preHandler: requireRole(['ADMIN']) }, async (req) => {
+      const { userIds, amountGerahs } = z
+        .object({
+          userIds: z.array(z.string().uuid()).min(1, 'Select at least one player.'),
+          amountGerahs: z
+            .number()
+            .int()
+            .positive('Grant amount must be at least 1 Shekel.')
+            .refine((val) => val % 20 === 0, 'Grant amount must be in whole Shekels.'),
+        })
+        .parse(req.body);
+
+      const uniqueIds = Array.from(new Set(userIds));
+
+      const updatedCount = await withTransaction(async (tx) => {
+        let count = 0;
+
+        for (const userId of uniqueIds) {
+          const { rows } = await tx.query<{ wallet_balance: string }>(
+            `UPDATE users
+             SET wallet_balance = wallet_balance + $1
+             WHERE id = $2
+             RETURNING wallet_balance`,
+            [amountGerahs, userId]
+          );
+
+          if (!rows.length) {
+            throw Object.assign(new Error(`User ${userId} not found.`), {
+              statusCode: 404,
+              code: 'USER_NOT_FOUND',
+            });
+          }
+
+          const newBalance = Number(rows[0].wallet_balance);
+
+          await tx.query(
+            `INSERT INTO wallet_ledger (user_id, entry_type, amount, balance_after)
+             VALUES ($1, 'ADMIN_ADJUSTMENT', $2, $3)`,
+            [userId, amountGerahs, newBalance]
+          );
+
+          count += 1;
+        }
+
+        return count;
+      });
+
+      const shekelsGranted = amountGerahs / 20;
+      return {
+        message: `Granted ${shekelsGranted.toLocaleString()} Shekels to ${updatedCount} player${
+          updatedCount === 1 ? '' : 's'
+        }.`,
+      };
+    }
+  );
 }
