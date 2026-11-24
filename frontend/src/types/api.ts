@@ -138,3 +138,7 @@ export interface KjvBookMeta {
   startVerseId: number;
   endVerseId: number;
 }
+
+export interface PlayerDataResponse {
+  ledgerData: { date: string; walletBalance: number }[];
+}

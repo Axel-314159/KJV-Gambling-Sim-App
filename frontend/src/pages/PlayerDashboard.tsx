@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, ApiError } from '../lib/api';
 import type { LedgerEntry, UserProfile } from '../types/api';
 import { formatCurrency, formatSignedCurrency } from '../lib/currency';
+import { IndexLineChart } from '../components/GameStats';
 // import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export function PlayerDashboard({ user }: { user: UserProfile }) {
@@ -141,6 +142,12 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
           </tbody>
         </table>
       </div>
+      
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <h2 className="font-semibold text-lg mb-3">Wallet Balance History</h2>
+        <IndexLineChart />
+      </div>
+
     </div>
   );
 }
