@@ -23,7 +23,7 @@ export async function roundRoutes(app: FastifyInstance) {
       `SELECT id, round_date, status, registration_opens_at, betting_opens_at,
               betting_closes_at, registered_count, max_verses_per_player, total_pot,
               min_segment_length, max_segment_length, min_segments, max_segments,
-              max_registered_players, min_stake_per_verse
+              max_registered_players, min_stake_per_verse, start_book, end_book
        FROM rounds
        WHERE status IN ('REGISTRATION_OPEN', 'BETTING_OPEN', 'SETTLING')
        ORDER BY id DESC LIMIT 1`
@@ -75,6 +75,8 @@ export async function roundRoutes(app: FastifyInstance) {
         maxSegments: r.max_segments,
         maxRegisteredPlayers: r.max_registered_players,
         minStakePerVerse: r.min_stake_per_verse,
+        startBook: r.start_book,
+        endBook: r.end_book
       },
       playerState: {
         isRegistered: regRows.length > 0,

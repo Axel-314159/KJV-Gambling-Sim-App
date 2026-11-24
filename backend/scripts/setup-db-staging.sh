@@ -149,7 +149,9 @@ CREATE TABLE IF NOT EXISTS rounds (
     min_segments            INT NOT NULL DEFAULT 1,
     max_segments            INT NOT NULL DEFAULT 5,
     max_registered_players  INT,
-    min_stake_per_verse     INT NOT NULL DEFAULT 20
+    min_stake_per_verse     INT NOT NULL DEFAULT 20,
+    start_book              INT NOT NULL DEFAULT 1,
+    end_book                INT NOT NULL DEFAULT 66
 );
 
 -- 7. Round Registrations & 1-Edit Submission Counter

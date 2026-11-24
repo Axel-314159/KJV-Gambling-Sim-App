@@ -16,6 +16,8 @@ const configUpdateSchema = z
     minStakePerVerse: z.number().int().min(1),
     nextBettingOpensAt: z.string().datetime().nullable().optional(),
     nextBettingClosesAt: z.string().datetime().nullable().optional(),
+    startBook: z.number().int().min(1).max(66),
+    endBook: z.number().int().min(1).max(66)
   })
   .refine((d) => d.minSegmentLength <= d.maxSegmentLength, {
     message: 'Min segment length cannot exceed max segment length.',
@@ -82,7 +84,8 @@ export async function adminRoutes(app: FastifyInstance) {
     const { rows: roundRows } = await pool.query(
       `SELECT id, round_date, status, betting_opens_at, betting_closes_at,
               registered_count, min_segment_length, max_segment_length,
-              min_segments, max_segments, max_registered_players, min_stake_per_verse
+              min_segments, max_segments, max_registered_players, min_stake_per_verse,
+              start_book, end_book
        FROM rounds
        WHERE status IN ('REGISTRATION_OPEN', 'BETTING_OPEN', 'SETTLING')
        ORDER BY id DESC LIMIT 1`
@@ -117,6 +120,8 @@ export async function adminRoutes(app: FastifyInstance) {
             maxSegments: r.max_segments,
             maxRegisteredPlayers: r.max_registered_players,
             minStakePerVerse: r.min_stake_per_verse,
+            startBook: r.start_book,
+            endBook: r.end_book
           }
         : null,
     };
@@ -199,8 +204,9 @@ export async function adminRoutes(app: FastifyInstance) {
              SET betting_opens_at = $1, betting_closes_at = $2,
                  min_segment_length = $3, max_segment_length = $4,
                  min_segments = $5, max_segments = $6,
-                 max_registered_players = $7, min_stake_per_verse = $8
-             WHERE id = $9`,
+                 max_registered_players = $7, min_stake_per_verse = $8,
+                 start_book = $9, end_book = $10
+             WHERE id = $11`,
             [
               opensAt,
               closesAt,
@@ -210,7 +216,9 @@ export async function adminRoutes(app: FastifyInstance) {
               body.maxSegments,
               body.maxRegisteredPlayers,
               body.minStakePerVerse,
-              activeRound.id,
+              body.startBook,
+              body.endBook,
+              activeRound.id
             ]
           );
 

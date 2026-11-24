@@ -33,6 +33,8 @@ export interface ActiveRoundState {
     maxSegments: number;
     maxRegisteredPlayers: number | null;
     minStakePerVerse: number;
+    startBook: number | null;
+    endBook: number | null;
   };
   playerState: {
     isRegistered: boolean;
@@ -68,6 +70,8 @@ export interface AdminGameConfigResponse {
     maxSegments: number;
     maxRegisteredPlayers: number | null;
     minStakePerVerse: number;
+    startBook: number;
+    endBook: number;
   } | null;
 }
 

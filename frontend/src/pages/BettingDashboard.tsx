@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2, CheckCircle2, Lock, AlertTriangle } from 'lucide-react';
 import { apiFetch, ApiError } from '../lib/api';
-import type { ActiveRoundState, BetSegment, KjvVerse, UserProfile, AutoSelectRequest } from '../types/api';
+import type { ActiveRoundState, BetSegment, KjvVerse, KjvBookMeta, UserProfile, AutoSelectRequest } from '../types/api';
 import { useServerCountdown } from '../hooks/useServerClock';
 import { KjvExplorer } from '../components/KjvExplorer';
 import { GERAHS_PER_SHEKEL, formatCurrency, toGerahs } from '../lib/currency';
+import { getBookRangeSummary } from '../lib/kjvBooks';
 
 export function BettingDashboard({ user }: { user: UserProfile }) {
   const queryClient = useQueryClient();
@@ -13,14 +14,29 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [bulkWagerShekels, setBulkWagerShekels] = useState<string>('');
 
+  /* get round state */
   const { data: state, isLoading } = useQuery<ActiveRoundState>({
     queryKey: ['activeRound'],
     queryFn: () => apiFetch<ActiveRoundState>('/rounds/current'),
     refetchInterval: 15_000,
   });
 
+  /* Get books meta */
+  const {
+    data: books,
+    isLoading: isLoadingBooks,
+    isError: _isBooksError,
+    error: _booksError,
+  } = useQuery<KjvBookMeta[]>({
+    queryKey: ['kjvBooks'],
+    queryFn: () => apiFetch<KjvBookMeta[]>('/kjv/books'),
+    staleTime: Infinity,
+  });
+
+  // const verseCount = 
   const round = state?.round;
   const playerState = state?.playerState;
+  const bookPool = getBookRangeSummary(round?.startBook, round?.endBook);
   const submissionCount = playerState?.submissionCount ?? 0;
   const draftStorageKey = round && user ? `kjv_draft_slip_${round.id}_${user.id}` : null;
 
@@ -275,6 +291,9 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
     );
   };
 
+  const startBookName = books?.find((b) => b.bookNumber === state?.round.startBook)?.bookName;
+  const endBookName = books?.find((b) => b.bookNumber === state?.round.endBook)?.bookName;
+
   return (
     <div className="space-y-6">
       {/* 1. Round Schedule & Status Banner */}
@@ -307,6 +326,15 @@ export function BettingDashboard({ user }: { user: UserProfile }) {
             {' '}• Min Stake: <strong className="text-slate-200">{formatCurrency(round.minStakePerVerse)}</strong>
             {' '}• Running Jackpot: <strong className="text-emerald-300">{formatCurrency(state.jackpotBalance)}</strong>
           </p>
+          <p className="text-sm text-slate-400 mt-1">
+            <strong className="text-slate-400">Book Range:</strong> [&nbsp;
+              {isLoadingBooks ? 'Loading books...' : <strong className="text-amber-300">{startBookName}</strong>}
+              &nbsp;&ndash;&nbsp;
+              {isLoadingBooks ? 'Loading books...' : <strong className="text-amber-300">{endBookName}</strong>}
+            &nbsp;]
+            {' '}• <span className="text-slate-200">({bookPool.availableVerses} verses)</span>
+          </p>
+          
         </div>
 
         <div className="text-right">

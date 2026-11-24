@@ -4,6 +4,7 @@ import { Lock, Unlock, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { apiFetch, ApiError } from '../lib/api';
 import type { AdminGameConfigResponse, UserProfile, AdminJackpotConfigResponse } from '../types/api';
 import { splitGerahs, toGerahs } from '../lib/currency';
+import { KjvExplorerMini } from '../components/KjvExplorer';
 
 function toLocalDatetimeInput(iso: string | null): string {
   if (!iso) return '';
@@ -124,6 +125,8 @@ function RoundConfigEditor() {
   const [minStakeShekels, setMinStakeShekels] = useState(1);
   const [minStakeGerahs, setMinStakeGerahs] = useState(0);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [startBook, setStartBook] = useState<number>(1);
+  const [endBook, setEndBook] = useState<number>(66);
 
   const {
     data: cfgData,
@@ -158,6 +161,9 @@ function RoundConfigEditor() {
       setNextOpensLocal(toLocalDatetimeInput(defaultConfig.pendingNextOpensAt));
       setNextClosesLocal(toLocalDatetimeInput(defaultConfig.pendingNextClosesAt));
     }
+
+    setStartBook(activeRound?.startBook ?? 1);
+    setEndBook(activeRound?.endBook ?? 66);
   }, [cfgData]);
 
   const saveMutation = useMutation({
@@ -175,6 +181,8 @@ function RoundConfigEditor() {
           minStakePerVerse: Math.max(1, toGerahs(Number(minStakeShekels), Number(minStakeGerahs))),
           nextBettingOpensAt: nextOpensLocal ? new Date(nextOpensLocal).toISOString() : null,
           nextBettingClosesAt: nextClosesLocal ? new Date(nextClosesLocal).toISOString() : null,
+          startBook,
+          endBook,
         }),
       }),
     onSuccess: (res) => {
@@ -394,7 +402,14 @@ function RoundConfigEditor() {
             </div>
           </div>
         </div>
-
+        
+        <KjvExplorerMini
+          startBook={startBook}
+          endBook={endBook}
+          onStartBookChange={setStartBook}
+          onEndBookChange={setEndBook}
+        />
+        
         <div className="flex justify-end pt-2">
           <button
             type="submit"
