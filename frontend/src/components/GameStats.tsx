@@ -3,10 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 import type { PlayerDataResponse } from '../types/api';
 import { CartesianGrid, Legend, Line, LineChart, LabelList, Tooltip, XAxis, YAxis } from 'recharts';
-// import { RechartsDevTools } from '@recharts/devtools';
 import { GERAHS_PER_SHEKEL } from '../lib/currency';
-// import { RechartsDevtools } from '@recharts/devtools';
-
 
 export function IndexLineChart() {
 

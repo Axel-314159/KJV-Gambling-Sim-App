@@ -1,13 +1,17 @@
 // src/pages/PlayerDashboard.tsx
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, ApiError } from '../lib/api';
 import type { LedgerEntry, UserProfile } from '../types/api';
 import { formatCurrency, formatSignedCurrency } from '../lib/currency';
-import { IndexLineChart } from '../components/GameStats';
 import type { SegmentReuseScore } from '../types/api';
-// import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
+
+const IndexLineChart = lazy(() => 
+  import('../components/GameStats').then((module) => ({
+    default: module.IndexLineChart
+  }))
+);
 
 export function PlayerDashboard({ user }: { user: UserProfile }) {
   const queryClient = useQueryClient();
@@ -98,7 +102,9 @@ export function PlayerDashboard({ user }: { user: UserProfile }) {
         
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <h2 className="font-semibold text-lg mb-3">Wallet Balance History</h2>
-          <IndexLineChart />
+          <Suspense fallback={<div>Loading Plot...</div>}>
+            <IndexLineChart />
+          </Suspense>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
