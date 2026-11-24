@@ -52,6 +52,23 @@ export async function kjvRoutes(app: FastifyInstance) {
     return rows;
   });
 
+
+  // Select specific book data
+  app.get('/api/kjv/books/:bookNumber', { preHandler: requireActivePlayer }, async (req) => {
+    const params = z.object({ bookNumber: z.coerce.number().int().min(1).max(66) }).parse(req.params);
+
+    const { rows } = await pool.query(
+      `SELECT book_number AS "bookNumber", book_name AS "bookName", testament,
+              MAX(chapter) AS "chapterCount", MIN(verse_id) AS "startVerseId", MAX(verse_id) AS "endVerseId"
+       FROM kjv_verses
+       WHERE book_number = $1
+       GROUP BY book_number, book_name, testament
+       ORDER BY book_number ASC`,
+       [params.bookNumber]
+    );
+    return rows[0];
+  });
+
   app.get('/api/kjv/books/:bookNumber/chapters/:chapter', { preHandler: requireActivePlayer }, async (req) => {
     const params = z
       .object({

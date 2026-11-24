@@ -95,7 +95,17 @@ export function KjvExplorer({
     queryFn: () => apiFetch<ActiveRoundState>(`/rounds/current`),
     refetchInterval: 15_000,
   });
-  
+
+
+  const hasHydratedRoundState = useRef(false);
+
+  // initialize navigator from server
+  useEffect(() => {
+    if (state && !hasHydratedRoundState.current ) {
+      setSelectedBookNumber(state.round.startBook ?? 1);
+    }
+  }, [state]);
+
 
   const displayedVerses = isSearching ? searchResults : chapterVerses;
   const isLoadingVerses = isSearching ? isLoadingSearch : isLoadingChapter;
@@ -519,6 +529,8 @@ export function KjvExplorer({
           minSegments={minSegments}
           maxSegments={maxSegments}
           isLoading={isAutoSelecting}
+          startBook={state?.round.startBook ?? 1}
+          endBook={state?.round.endBook ?? 66}
           onGenerate={(req) => {
             onAutoSelect(req);
             setShowAutoSelect(false);
@@ -781,6 +793,8 @@ function AutoSelectInlineForm({
   minSegments,
   maxSegments,
   isLoading,
+  startBook,
+  endBook,
   onGenerate,
 }: {
   maxVerses: number;
@@ -789,6 +803,8 @@ function AutoSelectInlineForm({
   minSegments: number;
   maxSegments: number;
   isLoading: boolean;
+  startBook: number;
+  endBook: number;
   onGenerate: (req: AutoSelectRequest) => void;
 }) {
   const [testament, setTestament] = useState<'ALL' | 'OLD' | 'NEW'>('ALL');
@@ -802,6 +818,27 @@ function AutoSelectInlineForm({
   const minAllowedTotal = segmentCount * minSegmentLength;
   const maxAllowedTotal = Math.min(segmentCount * maxSegmentLength, maxVerses);
 
+  const {
+    data: startBookMeta
+  } = useQuery<KjvBookMeta>({
+    queryKey: ['kjvBook', startBook],
+    queryFn: () =>
+      apiFetch<KjvBookMeta>(`/kjv/books/${startBook}`),
+    staleTime: Infinity,
+  });
+  
+  const {
+    data: endBookMeta
+  } = useQuery<KjvBookMeta>({
+    queryKey: ['kjvBook', endBook],
+    queryFn: () =>
+      apiFetch<KjvBookMeta>(`/kjv/books/${endBook}`),
+    staleTime: Infinity,
+  });
+  
+  const startVerseId = startBookMeta?.startVerseId;
+  const endVerseId = endBookMeta?.endVerseId;
+
   return (
     <div className="bg-slate-950 border border-indigo-500/40 rounded-lg p-4 space-y-3 text-sm">
       <h3 className="font-semibold text-indigo-300">Auto-Select Configuration</h3>
@@ -813,7 +850,7 @@ function AutoSelectInlineForm({
             onChange={(e) => setTestament(e.target.value as 'ALL' | 'OLD' | 'NEW')}
             className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5"
           >
-            <option value="ALL">Entire KJV</option>
+            <option value="ALL">Round Range</option>
             <option value="OLD">Old Testament</option>
             <option value="NEW">New Testament</option>
           </select>
@@ -856,6 +893,7 @@ function AutoSelectInlineForm({
         onClick={() =>
           onGenerate({
             testament: testament === 'ALL' ? undefined : testament,
+            customRange: [startVerseId ?? 1, endVerseId ?? 31102],
             segmentCount,
             totalLength,
           })
