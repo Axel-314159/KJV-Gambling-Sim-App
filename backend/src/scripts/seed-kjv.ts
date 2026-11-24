@@ -5,7 +5,7 @@ import { pool, withTransaction } from '../db/pool.js';
 
 const PG10_URL = 'https://www.gutenberg.org/cache/epub/10/pg10.txt';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_PATH = path.resolve(__dirname, '../../data/pg10.txt');
+const CACHE_PATH = path.resolve(__dirname, '../../data/kjv.txt');
 
 interface BookMeta {
   bookNumber: number;
@@ -94,7 +94,7 @@ interface ParsedVerse {
   text: string;
 }
 
-async function getPg10Text(): Promise<string> {
+async function getKjvText(): Promise<string> {
   try {
     const cached = await fs.readFile(CACHE_PATH, 'utf8');
     console.log(`Loaded cached pg10.txt from ${CACHE_PATH}`);
@@ -115,7 +115,7 @@ async function getPg10Text(): Promise<string> {
   }
 }
 
-function parsePg10(rawText: string): ParsedVerse[] {
+function parseKjv(rawText: string): ParsedVerse[] {
   const clean = rawText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 
   const genesisStart = clean.indexOf('1:1 In the beginning God created the heaven and the earth.');
@@ -256,8 +256,8 @@ async function seedDatabase(verses: ParsedVerse[]) {
 
 async function main() {
   try {
-    const rawText = await getPg10Text();
-    const verses = parsePg10(rawText);
+    const rawText = await getKjvText();
+    const verses = parseKjv(rawText);
 
     console.log(
       `Verified ${verses.length.toLocaleString()} verses across 66 books ` +
