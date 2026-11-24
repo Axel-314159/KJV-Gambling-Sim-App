@@ -16,6 +16,7 @@ export interface RawBet {
   stake: number;
 }
 
+
 /**
  * Registers all eligible users with auto_register = TRUE for the given round,
  * respecting max_registered_players if configured. Returns the number of newly
@@ -148,6 +149,45 @@ export async function awardJackpot(
   };
 }
 
+/**
+ * 
+ * @param tx PoolClient
+ * @param params userId: current user, betId: id of the segment for which to compute a score
+ * @returns A numeric Streak Score
+ */
+export async function computeStreakScore(
+  tx: PoolClient,
+  params: {
+    userId: string;
+    betId?: string | null;
+  }
+): Promise<number | null> {
+  const { rows: betsHistory } = await tx.query<RawBet>(
+    `SELECT id, user_id, start_verse_id, end_verse_id
+      FROM bets WHERE user_id = $1 AND outcome = 'WON'
+      ORDER BY start_verse_id ASC, end_verse_id DESC`,
+    [params.userId]
+  );
+
+  const { rows: thisBetRows } = await tx.query<RawBet>(
+    `SELECT id, user_id, start_verse_id, end_verse_id
+      FROM bets WHERE id = $1 AND user_id = $2`,
+    [params.betId, params.userId]
+  );
+
+  const thisBet = thisBetRows[0];
+
+  let streakScoreNum = 0;
+  let streakScoreDenom = (thisBet.end_verse_id + 1) - thisBet.start_verse_id;
+
+  for (let i = thisBet.start_verse_id; i < thisBet.end_verse_id; i++ ) {
+    const matchingBets = betsHistory.filter((bet) => bet.start_verse_id <= i && bet.end_verse_id >= i);
+    streakScoreNum += matchingBets.length + 1;
+  }
+
+  return streakScoreNum / streakScoreDenom;
+}
+
 
 export async function settleRound(roundId: number) {
   await withTransaction(async (tx) => {
@@ -237,27 +277,32 @@ export async function settleRound(roundId: number) {
     }
 
     // Phase B: Pluggable Formula v1 with Largest Remainder Integer Distribution
-    // W_i = (B_i * L_i) / sum(B_j * L_j) * totalPot
-    const totalPot = bets.reduce((acc, b) => acc + BigInt(b.stake), 0n);
-    const weighted = winners.map((w) => ({
-      bet: w,
-      weight: BigInt(w.stake) * BigInt(w.verse_length),
-    }));
-    const totalWeight = weighted.reduce((acc, item) => acc + item.weight, 0n);
+    // W_i = ( (B_i * L_i * (ln(S_i) + 1)) / sum(B_j * L_j * (ln(S_j) + 1)) ) * totalPot
+    const totalPot = bets.reduce((acc, b) => acc + b.stake, 0);
+
+    const weighted: {bet: RawBet, weight: number}[] = [];
+
+    for (const w of winners) {
+      const streakScore = await computeStreakScore(tx, { userId: w.user_id, betId: w.id });
+      weighted.push({bet: w, weight: w.stake * w.verse_length * (Math.log(streakScore ?? 1) + 1)})
+    }
+    
+    const totalWeight = weighted.reduce((acc, item) => acc + item.weight, 0);
 
     const allocations = weighted.map((item) => {
       const numerator = totalPot * item.weight;
-      const floorPayout = numerator / totalWeight;
-      const remainder = numerator % totalWeight;
+      const maxPayout = numerator / totalWeight;
+      const floorPayout = Math.floor(numerator / totalWeight);
+      const remainder = maxPayout - floorPayout;
       return { bet: item.bet, payout: floorPayout, remainder };
     });
 
     // Compute proportional Gerah payouts (floored)
-    const totalPaidOut = allocations.reduce((acc, alloc) => acc + alloc.payout, 0n);
+    const totalPaidOut = allocations.reduce((acc, alloc) => acc + alloc.payout, 0);
 
     // Route fractional Gerah remainder into the running Jackpot
     const remainderGerahs = totalPot - totalPaidOut;
-    if (remainderGerahs > 0n) {
+    if (remainderGerahs > 0) {
       const { rows: jpRows } = await tx.query(
         `UPDATE game_config
           SET jackpot_balance = jackpot_balance + $1, updated_at = NOW()
