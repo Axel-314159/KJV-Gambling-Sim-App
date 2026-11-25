@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Search, ChevronLeft, ChevronRight, ChevronDown, X, AlertCircle, AlertTriangle, BookOpenText } from 'lucide-react';
 import { ApiError, apiFetch } from '../lib/api';
-import type { AutoSelectRequest, KjvBookMeta, KjvVerse, ActiveRoundState, RandomSectionRequest, KjvSection } from '../types/api';
+import type { AutoSelectRequest, KjvBookMeta, KjvVerse, ActiveRoundState, KjvSection } from '../types/api';
 
 interface KjvExplorerProps {
   isSlipLocked: boolean;
