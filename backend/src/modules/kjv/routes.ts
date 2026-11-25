@@ -1,8 +1,10 @@
-import crypto from 'node:crypto';
+import crypto, { randomInt } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { pool } from '../../db/pool.js';
 import { requireActivePlayer } from '../../plugins/auth.js';
+import { KJV_TOTAL_VERSES } from '../../config/time.js';
+import { start } from 'node:repl';
 
 interface Interval {
   start: number;
@@ -243,4 +245,80 @@ export async function kjvRoutes(app: FastifyInstance) {
       message: 'Could not fit non-overlapping segments in that narrow range. Try broadening your filter.',
     });
   });
+
+  app.post('/api/kjv/random-section', { preHandler: requireActivePlayer }, async (req, reply) => {
+    const body = z
+      .object({
+        fullTextPct: z.number().min(0.1).max(100),
+        marginPct: z.number().min(0.1).max(100),
+      })
+      .parse(req.body);
+
+    const { rows: bookSummary } = await pool.query(
+      `SELECT
+          book_name, book_number,
+          COUNT(*) AS verses_in_book, 
+          AVG(verse_id) AS order_by,
+          MIN(verse_id) AS start_verse,
+          MAX(verse_id) AS end_verse
+      FROM kjv_verses
+      GROUP BY book_name, book_number
+      ORDER BY order_by ASC`
+    );
+
+    const textFraction  = body.fullTextPct/100.0;
+    const idealSize     = Math.round(textFraction * KJV_TOTAL_VERSES);
+    const minVerseId    = Math.floor((idealSize) / 2.0);
+    const maxVerseId    = Math.ceil(KJV_TOTAL_VERSES - (( idealSize ) / 2.0));
+
+    let actualPct = 100.0;
+    let passes = 0;
+    let startId = 0;
+    let startBookNum = 1;
+    let endId = 31102;
+    let endBookNum = 66;
+    do {
+
+      const randomVerseId = Math.floor((Math.random() * (maxVerseId - minVerseId + 1)) + minVerseId);
+      const idealStartId  = randomVerseId - Math.round(idealSize/2.0);
+      const idealEndId    = randomVerseId + Math.round(idealSize/2.0);
+      
+      // find start book end and end book start
+      const startBook = bookSummary.find((book) => book.start_verse <= idealStartId && book.end_verse >= idealStartId);
+      if ((idealStartId - startBook.start_verse) < (startBook.end_verse - idealStartId)) {
+        startId = startBook.start_verse;
+      } 
+      else {
+        startId = startBook.end_verse;
+      }
+      startBookNum = startBook.book_number;
+
+      const endBook = bookSummary.find((book) => book.start_verse <= idealEndId && book.end_verse >= idealEndId);
+      if ((idealEndId - endBook.start_verse) < (endBook.end_verse - idealEndId)) {
+        endId = endBook.start_verse;
+      } 
+      else {
+        endId = endBook.end_verse;
+      }
+      endBookNum = endBook.book_number;
+
+      actualPct = 100.0 * (endId - startId + 1) / KJV_TOTAL_VERSES;
+      passes += 1;
+    } while (actualPct > (body.fullTextPct + body.marginPct) && passes < 10);
+
+    if (actualPct <= (body.fullTextPct + body.marginPct)) {
+      return {
+        startBook: startBookNum,
+        endBook: endBookNum,
+        pctOfText: actualPct
+      };
+    } 
+    else {
+      return reply.status(400).send({
+        code: 'MARGIN_TOO_SMALL',
+        message: 'Could not find a suitable section, try increasing your margin..',
+      });
+    }
+  });
+
 }

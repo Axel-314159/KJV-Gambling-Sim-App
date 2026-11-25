@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Search, ChevronLeft, ChevronRight, ChevronDown, X, AlertCircle, BookOpenText } from 'lucide-react';
-import { apiFetch } from '../lib/api';
-import type { AutoSelectRequest, KjvBookMeta, KjvVerse, ActiveRoundState } from '../types/api';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Search, ChevronLeft, ChevronRight, ChevronDown, X, AlertCircle, AlertTriangle, BookOpenText } from 'lucide-react';
+import { ApiError, apiFetch } from '../lib/api';
+import type { AutoSelectRequest, KjvBookMeta, KjvVerse, ActiveRoundState, RandomSectionRequest, KjvSection } from '../types/api';
 
 interface KjvExplorerProps {
   isSlipLocked: boolean;
@@ -550,6 +550,9 @@ export function KjvExplorerMini({
   onEndBookChange,
 }: KjvExplorerMiniProps) {
   const [_searchQuery, setSearchQuery] = useState<string>('');
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [pctOfFullText, setPctOfFullText] = useState<number>(25);
+  const [pctMargin, setPctMargin] = useState<number>(5);
 
   // Custom dropdown state
   const [openStartBookMenu, setStartBookOpenMenu] = useState<'BOOK' | null>(null);
@@ -604,11 +607,83 @@ export function KjvExplorerMini({
   const otBooks = filteredBooks.filter((b) => b.testament === 'OLD');
   const ntBooks = filteredBooks.filter((b) => b.testament === 'NEW');
 
+  const randSectionMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<KjvSection>('/kjv/random-section', {
+        method: 'POST',
+        body: JSON.stringify({
+          fullTextPct: pctOfFullText,
+          marginPct: pctMargin
+        }),
+      }),
+    onSuccess: (sectionResp) => {
+      handleStartBookChange(sectionResp.startBook);
+      handleEndBookChange(sectionResp.endBook);
+      setFeedbackError(null);
+    },
+    onError: (err: ApiError) => setFeedbackError(err.message),
+  });
 
   return (
     
     <div className="bg-slate-900  rounded-xl p-4 space-y-4">
       <h3 className="font-semibold text-lg">Select Book Range</h3>
+
+      {/* Auto select random books to hit percentage  */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Percentage of full text to use</label>
+          
+          <div className="relative">
+            <input
+              type="number"
+              min={0}
+              value={pctOfFullText}
+              onChange={(e) => setPctOfFullText(Number(e.target.value))}
+              required
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 pr-12 font-mono"
+            />
+            <span className="text-[11px] text-slate-500 absolute right-2.5 top-2.5">%</span>
+            
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Allowable margin</label>
+          <div className="relative">
+            <input
+              type="number"
+              min={0}
+              value={pctMargin}
+              onChange={(e) => setPctMargin(Number(e.target.value))}
+              required
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 pr-12 font-mono"
+            />
+            <span className="text-[11px] text-slate-500 absolute right-2.5 top-2.5">%</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Run</label>
+          <button
+            type="button"
+            onClick={() => randSectionMutation.mutate() }
+            disabled={false}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold py-2 rounded-lg"
+          >
+            {false ? 'Selecting Ranges...' : 'Select a Random Range'}
+          </button>
+        </div>
+
+        {feedbackError && (
+          <div className="bg-rose-950/60 border border-rose-800 text-rose-200 px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+            {feedbackError}
+          </div>
+        )}
+
+      </div>
 
       {/* Book & Chapter Dropdown Bar */}
       <div ref={dropdownContainerRef} className="grid grid-cols-2 sm:grid-cols-12 gap-2.5">
